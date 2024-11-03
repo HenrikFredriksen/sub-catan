@@ -1,7 +1,6 @@
 import HexCoordinate as pos
 from Tile import Tile
 from Vertex import Vertex
-from House import House
 import pygame
 import numpy as np
 
@@ -95,8 +94,7 @@ class GameBoard:
         self.screen_width = width
         self.screen_height = height
         
-    def handle_click(self, mouse_pos):
-        print(f"Mouse clicked at: {mouse_pos}")
+    def find_nearest_vertex(self, mouse_pos):
         nearest_vertex = None
         min_distance = float("inf")
         for vertex in self.vertices.values():
@@ -105,60 +103,5 @@ class GameBoard:
             if distance < min_distance and distance < self.hex_size / 2:
                 nearest_vertex = vertex
                 min_distance = distance
-        if nearest_vertex:
-            print(f"Nearest vertex: {nearest_vertex.position}, Distance: {min_distance}")
-        if nearest_vertex and self.is_valid_house_placement(nearest_vertex):
-            house = House(vertex=nearest_vertex, player=1)
-            nearest_vertex.house = house
-            print(f"Placed house at {nearest_vertex.position}")
-            
-        else:
-            print("Invalid placement")
-                
-    def is_valid_house_placement(self, vertex):
-        if vertex.house is not None:
-            return False
-        return True
-   
-pygame.init()
-screen_width, screen_heigth = 1200, 900
-screen = pygame.display.set_mode((screen_width, screen_heigth))
-pygame.display.set_caption("Catan")
- 
-board = GameBoard()
-board.set_screen_dimensions(screen_width, screen_heigth)
-
-board_radius = 2
-
-resources = ["brick", "wood", "sheep", "wheat", "ore"]
-
-# Generate the tiles in a hex grid
-for q in range(-board_radius, board_radius + 1):
-    for r in range(-board_radius, board_radius + 1):
-        s = -q - r
-        if -board_radius <= s <= board_radius:
-            resource = resources[np.random.randint(0, len(resources))]
-            number = np.random.randint(2, 12) # 2-12 inclusive, 7 should not be included
-            if q == 0 and r == 0:
-                resource = "desert"
-                number = 0
-            board.add_tile(resource, number, q, r)
-
-board.generate_vertices()
-
-running = True
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos()
-            board.handle_click(mouse_pos)
-            
-        screen.fill((100, 140, 250))
-        board.draw(screen)
-        pygame.display.flip()
-        
-pygame.quit()
+        return nearest_vertex
 
