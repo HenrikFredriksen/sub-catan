@@ -90,14 +90,38 @@ class GameBoard:
                 corner_int = (int(round(corner[0])), int(round(corner[1])))
                 if corner_int not in self.vertices:
                     self.vertices[corner_int] = Vertex(corner_int)
-    
-    
+
     def set_screen_dimensions(self, width, height):
         self.screen_width = width
         self.screen_height = height
+        
+    def handle_click(self, mouse_pos):
+        print(f"Mouse clicked at: {mouse_pos}")
+        nearest_vertex = None
+        min_distance = float("inf")
+        for vertex in self.vertices.values():
+            vx, vy = vertex.position
+            distance = np.hypot(mouse_pos[0] - vx, mouse_pos[1] - vy)
+            if distance < min_distance and distance < self.hex_size / 2:
+                nearest_vertex = vertex
+                min_distance = distance
+        if nearest_vertex:
+            print(f"Nearest vertex: {nearest_vertex.position}, Distance: {min_distance}")
+        if nearest_vertex and self.is_valid_house_placement(nearest_vertex):
+            house = House(vertex=nearest_vertex, player=1)
+            nearest_vertex.house = house
+            print(f"Placed house at {nearest_vertex.position}")
+            
+        else:
+            print("Invalid placement")
+                
+    def is_valid_house_placement(self, vertex):
+        if vertex.house is not None:
+            return False
+        return True
    
 pygame.init()
-screen_width, screen_heigth = 1920, 1080
+screen_width, screen_heigth = 1200, 900
 screen = pygame.display.set_mode((screen_width, screen_heigth))
 pygame.display.set_caption("Catan")
  
@@ -128,6 +152,10 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos = pygame.mouse.get_pos()
+            board.handle_click(mouse_pos)
+            
         screen.fill((100, 140, 250))
         board.draw(screen)
         pygame.display.flip()

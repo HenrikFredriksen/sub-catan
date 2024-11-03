@@ -3,8 +3,8 @@ import numpy as np
 
 class House:
     def __init__(self, vertex, player):
-        self.player = player
         self.vertex = vertex
+        self.player = player
         
     
     def get_player(self):
