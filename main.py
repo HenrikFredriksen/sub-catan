@@ -24,7 +24,7 @@ def main():
             s = -q - r
             if -board_radius <= s <= board_radius:
                 resource = resources[np.random.randint(0, len(resources))]
-                number = np.random.randint(2, 12) # 2-12 inclusive, 7 should not be included
+                number = np.random.choice([2, 3, 4, 5, 6, 8, 9, 10, 11, 12])
                 if q == 0 and r == 0:
                     resource = "desert"
                     number = 0
