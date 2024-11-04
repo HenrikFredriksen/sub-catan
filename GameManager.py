@@ -18,3 +18,4 @@ class GameManager:
                 print(f"Placed house at {nearest_vertex.position}")
             else:
                 print("Invalid placement")
+                
