@@ -43,6 +43,10 @@ class GameManager:
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
             self.current_player.settlements -= 1
+            self.current_player.resources['wood'] -= 1
+            self.current_player.resources['brick'] -= 1
+            self.current_player.resources['sheep'] -= 1
+            self.current_player.resources['wheat'] -= 1
             print(f"Placed house at {vertex.position}")
         else:
             print("Invalid House placement")
@@ -53,6 +57,8 @@ class GameManager:
             road = Road(vertex1=edge.vertex1, vertex2=edge.vertex2, player=self.current_player)
             edge.road = road
             self.current_player.roads -= 1
+            self.current_player.resources['wood'] -= 1
+            self.current_player.resources['brick'] -= 1
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
         else:
             print("Invalid Road placement")
