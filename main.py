@@ -31,6 +31,7 @@ def main():
                 board.add_tile(resource, number, q, r)
 
     board.generate_vertices()
+    board.generate_edges()
     
     pygame.font.init()
     font = pygame.font.SysFont(None, 24)
