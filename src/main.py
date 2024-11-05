@@ -72,8 +72,8 @@ def main():
         mouse_pos_text_surface = font.render(mouse_pos_text, True, (255, 255, 255))
         screen.blit(mouse_pos_text_surface, (10, 10))
         
-        resources_text_p1 = f"Player 1: {player1.resources}"
-        resources_text_p2 = f"Player 2: {player2.resources}"
+        resources_text_p1 = f"Player 1: {player1.victory_points}, {player1.resources}"
+        resources_text_p2 = f"Player 2: {player2.victory_points}, {player2.resources}"
         resources_text_surface_p1 = font.render(resources_text_p1, True, (0,0,0))
         resources_text_surface_p2 = font.render(resources_text_p2, True, (0,0,0))
         screen.blit(resources_text_surface_p1, (screen_width // 4, 10))

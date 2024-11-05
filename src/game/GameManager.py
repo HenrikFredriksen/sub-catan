@@ -42,6 +42,7 @@ class GameManager:
         if self.current_player.can_build_settlement() and self.game_rules.is_valid_house_placement(vertex):
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
+            self.current_player.victory_points += 1
             self.current_player.settlements -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
@@ -66,4 +67,10 @@ class GameManager:
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
         print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
+        
+    def roll_dice(self):
+        dice1 = np.random.randint(1, 6)
+        dice2 = np.random.randint(1, 6)
+        print(f"Dice rolled: {dice1}, {dice2}")
+        return dice1 + dice2
         
