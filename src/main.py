@@ -69,8 +69,16 @@ def main():
             
         mouse_pos = pygame.mouse.get_pos()
         mouse_pos_text = f"Mouse Position: {mouse_pos}"
-        text_surface = font.render(mouse_pos_text, True, (255, 255, 255))
-        screen.blit(text_surface, (10, 10))
+        mouse_pos_text_surface = font.render(mouse_pos_text, True, (255, 255, 255))
+        screen.blit(mouse_pos_text_surface, (10, 10))
+        
+        resources_text_p1 = f"Player 1: {player1.resources}"
+        resources_text_p2 = f"Player 2: {player2.resources}"
+        resources_text_surface_p1 = font.render(resources_text_p1, True, (0,0,0))
+        resources_text_surface_p2 = font.render(resources_text_p2, True, (0,0,0))
+        screen.blit(resources_text_surface_p1, (screen_width // 4, 10))
+        screen.blit(resources_text_surface_p2, (screen_width // 4, screen_height - 30))
+        
         pygame.display.flip()
 
     pygame.quit()
