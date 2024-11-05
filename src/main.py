@@ -19,8 +19,8 @@ def main():
      # Initialize players
     player1 = Player(color=(255, 0, 0), settlements=5, roads=15)  # Red player
     player2 = Player(color=(0, 0, 255), settlements=5, roads=15)  # Blue player
-    player3 = Player(color=(0, 255, 0), settlements=5, roads=15)  # Green player
-    player4 = Player(color=(255, 255, 0), settlements=5, roads=15)  # Yellow player
+    player3 = Player(color=(20, 220, 20), settlements=5, roads=15)  # Green player
+    player4 = Player(color=(255, 165, 0), settlements=5, roads=15)  # Orange player
     players = [player1, player2, player3, player4]
     
     manager = GameManager(board, rules, players)
@@ -79,8 +79,7 @@ def main():
         
         y_offset = 30
         for player in players:
-            resources_text = f"{player.color}: {player.resources} : VP:{player.victory_points}"
-            resources_text_surface = font.render(resources_text, True, (0,0,0))
+            resources_text_surface = font.render(str(player), True, (0,0,0))
             screen.blit(resources_text_surface, (10, y_offset))
             y_offset += 20
         
