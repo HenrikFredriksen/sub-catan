@@ -141,6 +141,29 @@ class GameBoard:
         self.screen_width = width
         self.screen_height = height
         
+    def generate_board(self, board_radius):
+        numbers = [2, 3,3, 4,4, 5,5, 6,6, 8,8, 9,9, 10,10, 11,11, 12]
+        resources = ["brick"] * 3 + ["ore"] * 3 + ["wood"] * 4 + ["sheep"] * 4 + ["wheat"] * 4 + ["desert"]
+        np.random.shuffle(numbers)
+        np.random.shuffle(resources)
+        numbers_index = 0
+        resources_index = 0
+        for q in range(-board_radius, board_radius + 1):
+            for r in range(-board_radius, board_radius + 1):
+                s = -q - r
+                if -board_radius <= s <= board_radius:
+                    resource = resources[resources_index]
+                    if resource != "desert":
+                        number = numbers[numbers_index]
+                        numbers_index += 1
+                    else:
+                        number = 0
+                    resources_index += 1
+                    self.add_tile(resource, number, q, r)
+        
+        self.generate_vertices()
+        self.generate_edges()
+        
     def find_nearest_vertex(self, mouse_pos, proximity_radius):
         nearest_vertex = None
         min_distance = float("inf")
