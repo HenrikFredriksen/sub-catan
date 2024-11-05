@@ -34,16 +34,13 @@ def main():
     # Generate the tiles in a hex grid
     board_radius = 2
     board.generate_board(board_radius)
-    
-
 
     next_turn_button = Button(
         x=10, y=screen_height - 50, width=150, height=40,
         text="Next turn", font=font, color=(200, 200, 200), hover_color=(150, 150, 150),
         action=manager.update
     )
-    
-    
+        
     running = True
     while running:
         for event in pygame.event.get():
@@ -62,9 +59,10 @@ def main():
                     console.scroll("down")
 
         screen.fill((100, 140, 250))
-        board.draw(screen)
+        board.draw(screen, manager.highlighted_vertecies, manager.highlighted_edges)
         
         next_turn_button.draw(screen)
+        
         turn_text = f"Turn: {manager.turn}, Player: {manager.current_player.get_color()}"
         turn_text_surface = font.render(turn_text, True, (255, 255, 255))
         screen.blit(turn_text_surface, (10, screen_height - 80))
@@ -81,7 +79,7 @@ def main():
             y_offset += 20
             
         console.draw(screen)
-        
+            
         pygame.display.flip()
 
     pygame.quit()
