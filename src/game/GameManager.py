@@ -3,11 +3,12 @@ from game.Road import Road
 import numpy as np
 
 class GameManager:
-    def __init__(self, game_board, game_rules, players):
+    def __init__(self, game_board, game_rules, players, console):
         self.turn = 1
         self.game_board = game_board
         self.game_rules = game_rules
         self.players = players
+        self.console = console
         self.current_player_index = 0
         self.game_over = False
         
@@ -22,11 +23,13 @@ class GameManager:
         for player in self.players:
             if player.victory_points >= 10:
                 print(f"Player {player} wins!")
+                self.console.log(f"Player {player} wins!")
                 self.game_over = True
         else:
             roll = self.roll_dice()
             if roll == 7:
                 #implement robber
+                self.console.log("Robber moves")
                 print("Robber moves")
                 
             else:
@@ -42,6 +45,7 @@ class GameManager:
                 for vertex in self.game_board.get_tile_vertices(tile):
                     # check if there is a house on the vertex
                     if vertex.house:
+                        self.console.log(f"{vertex.house.player.get_color()} collected {tile.resource}")
                         vertex.house.player.add_resource(tile.resource, 1)
     
     def handle_click(self, mouse_pos):
@@ -73,6 +77,7 @@ class GameManager:
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
             self.current_player.victory_points += 1
+            self.console.log(f"{self.current_player.get_color()} built a house +1VP")
             self.current_player.settlements -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
@@ -90,6 +95,7 @@ class GameManager:
             self.current_player.roads -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
+            self.console.log(f"{self.current_player.get_color()} built a road")
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
         else:
             print("Invalid Road placement")
@@ -101,6 +107,7 @@ class GameManager:
     def roll_dice(self):
         dice1 = np.random.randint(1, 7)
         dice2 = np.random.randint(1, 7)
+        self.console.log(f"Dice rolled: {dice1}, {dice2}")
         print(f"Dice rolled: {dice1}, {dice2}")
         return dice1 + dice2
         

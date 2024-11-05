@@ -39,6 +39,9 @@ class Player:
     def get_victory_points(self):
         return self.victory_points
     
+    def get_color(self):
+        return self.COLOR_NAMES.get(self.color, str(self.color))
+    
     def __str__(self):
         color_name = self.COLOR_NAMES.get(self.color, str(self.color))
         resources_str = ', '.join(f"{resource}: {amount}" for resource, amount in self.resources.items())
