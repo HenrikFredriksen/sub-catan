@@ -43,7 +43,7 @@ class Player:
         return self.COLOR_NAMES.get(self.color, str(self.color))
     
     def __str__(self):
-        color_name = self.COLOR_NAMES.get(self.color, str(self.color))
+        color_name = self.get_color()
         resources_str = ', '.join(f"{resource}: {amount}" for resource, amount in self.resources.items())
         return f"Player {color_name} - VP: {self.victory_points}, {resources_str}"
     

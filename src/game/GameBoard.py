@@ -73,6 +73,14 @@ class GameBoard:
             if corner_int in self.vertices:
                 vertices.append(self.vertices[corner_int])
         return vertices
+    
+    # Get the tiles adjacent to a vertex, Inefficient?
+    def get_tiles_adj_to_vertex(self, vertex):
+        adjacent_tiles = []
+        for tile in self.tiles.values():
+            if vertex in self.get_tile_vertices(tile):
+                adjacent_tiles.append(tile)
+        return adjacent_tiles
         
     # Only for debugging
     def draw_grid(self, screen):
@@ -84,23 +92,20 @@ class GameBoard:
         for vertex in self.vertices.values():
             if vertex in highlighted_vertices:
                 pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
+                
             if vertex.house:
                 pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
                 pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
-            else:
-                pass
-                #pygame.draw.circle(screen, (255, 0, 0), vertex.position, 5)
                 
     def draw_edges(self, screen, highlighted_edges):
         for edge in self.edges.values():
             if edge in highlighted_edges:
                 pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
+                
             if edge.road:
                 pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
                 pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
-            else:
-                pass
-                #pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 2)
+            
         
     # Draw the tiles, vertices and edges
     def draw(self, screen, highlighted_vertices, highlighted_edges):
