@@ -4,7 +4,7 @@ import numpy as np
 
 class GameManager:
     def __init__(self, game_board, game_rules, players):
-        self.turn = 0
+        self.turn = 1
         self.game_board = game_board
         self.game_rules = game_rules
         self.players = players
@@ -18,13 +18,7 @@ class GameManager:
     def update(self):
         if self.game_over:
             return
-        
-        self.turn += 1
-        print(f"Turn {self.turn}")
-        print(f"Current player: {self.current_player_index}, {self.current_player.color}")
-        self.current_player_index = self.turn % len(self.players)
-        print(f"Next player: {self.current_player_index}, {self.current_player.color}")
-        
+                
         for player in self.players:
             if player.victory_points >= 10:
                 print(f"Player {player} wins!")
@@ -38,6 +32,8 @@ class GameManager:
             else:
                 self.check_tile_resources(roll)
                 print(f"Resources collected for roll {roll}")
+                
+            self.turn += 1
             self.change_player()
             
     def check_tile_resources(self, roll):
