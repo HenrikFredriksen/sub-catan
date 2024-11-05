@@ -4,6 +4,7 @@ import numpy as np
 
 class GameManager:
     def __init__(self, game_board, game_rules, players):
+        self.turn = 0
         self.game_board = game_board
         self.game_rules = game_rules
         self.players = players
@@ -13,6 +14,39 @@ class GameManager:
     @property
     def current_player(self):
         return self.players[self.current_player_index]
+    
+    def update(self):
+        if self.game_over:
+            return
+        
+        self.turn += 1
+        print(f"Turn {self.turn}")
+        print(f"Current player: {self.current_player_index}, {self.current_player.color}")
+        self.current_player_index = self.turn % len(self.players)
+        print(f"Next player: {self.current_player_index}, {self.current_player.color}")
+        
+        for player in self.players:
+            if player.victory_points >= 10:
+                print(f"Player {player} wins!")
+                self.game_over = True
+        else:
+            roll = self.roll_dice()
+            if roll == 7:
+                #implement robber
+                print("Robber moves")
+                
+            else:
+                self.check_tile_resources(roll)
+                print(f"Resources collected for roll {roll}")
+            self.change_player()
+            
+    def check_tile_resources(self, roll):
+        for tile in self.game_board.tiles.values():
+            if tile.get_number() == roll:
+                for vertex in self.game_board.get_tile_vertices(tile):
+                    # check if there is a house on the vertex
+                    if vertex.house:
+                        vertex.house.player.add_resource(tile.resource, 1)
     
     def handle_click(self, mouse_pos):
         print(f"Mouse clicked at: {mouse_pos}")
@@ -69,8 +103,8 @@ class GameManager:
         print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
         
     def roll_dice(self):
-        dice1 = np.random.randint(1, 6)
-        dice2 = np.random.randint(1, 6)
+        dice1 = np.random.randint(1, 7)
+        dice2 = np.random.randint(1, 7)
         print(f"Dice rolled: {dice1}, {dice2}")
         return dice1 + dice2
         
