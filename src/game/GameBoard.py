@@ -83,6 +83,7 @@ class GameBoard:
     def draw_vertices(self, screen):
         for vertex in self.vertices.values():
             if vertex.house:
+                pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
                 pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
             else:
                 pass
@@ -91,6 +92,7 @@ class GameBoard:
     def draw_edges(self, screen):
         for edge in self.edges.values():
             if edge.road:
+                pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
                 pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
             else:
                 pass
@@ -110,8 +112,8 @@ class GameBoard:
             if number_image:
                 number_rect = number_image.get_rect(center=(x + self.tile_width // 2, y + self.tile_height // 2))
                 screen.blit(number_image, number_rect.topleft)
-        self.draw_vertices(screen)
         self.draw_edges(screen)
+        self.draw_vertices(screen)
         
     # Generate the vertices and edges for the hex grid
     def generate_vertices(self):
