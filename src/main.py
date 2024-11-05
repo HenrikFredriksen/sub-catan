@@ -25,23 +25,9 @@ def main():
     
     manager = GameManager(board, rules, players)
 
-    board_radius = 2
-    resources = ["brick", "wood", "sheep", "wheat", "ore"]
-
     # Generate the tiles in a hex grid
-    for q in range(-board_radius, board_radius + 1):
-        for r in range(-board_radius, board_radius + 1):
-            s = -q - r
-            if -board_radius <= s <= board_radius:
-                resource = resources[np.random.randint(0, len(resources))]
-                number = np.random.choice([2, 3, 4, 5, 6, 8, 9, 10, 11, 12])
-                if q == 0 and r == 0:
-                    resource = "desert"
-                    number = 0
-                board.add_tile(resource, number, q, r)
-
-    board.generate_vertices()
-    board.generate_edges()
+    board_radius = 2
+    board.generate_board(board_radius)
     
     pygame.font.init()
     font = pygame.font.SysFont(None, 24)
