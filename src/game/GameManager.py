@@ -56,4 +56,8 @@ class GameManager:
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
         else:
             print("Invalid Road placement")
+            
+    def change_player(self):
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
         
