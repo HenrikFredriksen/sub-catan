@@ -1,6 +1,7 @@
 import HexCoordinate as pos
 from Tile import Tile
 from Vertex import Vertex
+from Edge import Edge
 import pygame
 import numpy as np
 
@@ -8,6 +9,8 @@ class GameBoard:
     def __init__(self):
         self.hex_size = 100
         self.tiles = {}
+        self.vertices = {}
+        self.edges = {}
         # Tile dimensions for hex grid, width to height ratio is sqrt(3)/2
         self.tile_width = int(self.hex_size * np.sqrt(3))
         self.tile_height = int(self.hex_size * 2)
@@ -19,7 +22,6 @@ class GameBoard:
             "ore": pygame.transform.scale(pygame.image.load("img/terrainHexes/mountain.png"), (self.tile_width, self.tile_height)),
             "desert": pygame.transform.scale(pygame.image.load("img/terrainHexes/desert.png"), (self.tile_width, self.tile_height))
         }
-        self.vertices = {}
         
     def add_tile(self, resource, number, q, r):
         position = pos.HexCoordinate(q, r)
@@ -53,19 +55,30 @@ class GameBoard:
             y = center_y + self.hex_size * np.sin(angle_rad)
             corners.append((x, y))
         return corners
-    
+        
+    # Only for debugging
     def draw_grid(self, screen):
         for tile in self.tiles.values():
             corners = self.get_hex_corners(tile.position)
             pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
-            
+        
     def draw_vertices(self, screen):
         for vertex in self.vertices.values():
             if vertex.house:
                 pygame.draw.circle(screen, (0, 255, 0), vertex.position, 8)
             else:
-                pygame.draw.circle(screen, (255, 0, 0), vertex.position, 5)
+                pass
+                #pygame.draw.circle(screen, (255, 0, 0), vertex.position, 5)
+                
+    def draw_edges(self, screen):
+        for edge in self.edges.values():
+            if edge.road:
+                pygame.draw.line(screen, (0, 255, 0), edge.vertex1.position, edge.vertex2.position, 4)
+            else:
+                pass
+                #pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 2)
         
+    # Draw the tiles, vertices and edges
     def draw(self, screen):
         for tile in self.tiles.values():
             image = self.tile_images[tile.resource]
@@ -79,29 +92,56 @@ class GameBoard:
             if number_image:
                 number_rect = number_image.get_rect(center=(x + self.tile_width // 2, y + self.tile_height // 2))
                 screen.blit(number_image, number_rect.topleft)
-        self.draw_grid(screen)
         self.draw_vertices(screen)
+        self.draw_edges(screen)
         
+    # Generate the vertices and edges for the hex grid
     def generate_vertices(self):
         for tile in self.tiles.values():
             corners = self.get_hex_corners(tile.position)
-            for corner in corners:
+            for i, corner in enumerate(corners):
                 corner_int = (int(round(corner[0])), int(round(corner[1])))
                 if corner_int not in self.vertices:
                     self.vertices[corner_int] = Vertex(corner_int)
+                # Add neighbors
+                next_corner = corners[(i + 1) % len(corners)]
+                next_corner_int = (int(round(next_corner[0])), int(round(next_corner[1])))
+                if next_corner_int not in self.vertices:
+                    self.vertices[next_corner_int] = Vertex(next_corner_int)
+                self.vertices[corner_int].add_neighbor(self.vertices[next_corner_int])
+                self.vertices[next_corner_int].add_neighbor(self.vertices[corner_int])
+
+                    
+    def generate_edges(self):
+        for vertex in self.vertices.values():
+            for neighbor in vertex.neighbors:
+                edge_key = tuple(sorted([vertex.position, neighbor.position]))
+                if edge_key not in self.edges:
+                    self.edges[edge_key] = Edge(vertex, neighbor)
 
     def set_screen_dimensions(self, width, height):
         self.screen_width = width
         self.screen_height = height
         
-    def find_nearest_vertex(self, mouse_pos):
+    def find_nearest_vertex(self, mouse_pos, proximity_radius):
         nearest_vertex = None
         min_distance = float("inf")
         for vertex in self.vertices.values():
             vx, vy = vertex.position
             distance = np.hypot(mouse_pos[0] - vx, mouse_pos[1] - vy)
-            if distance < min_distance and distance < self.hex_size / 2:
+            if distance < min_distance and distance < proximity_radius:
                 nearest_vertex = vertex
                 min_distance = distance
         return nearest_vertex
-
+    
+    def find_nearest_edge(self, mouse_pos, proximity_radius):
+        nearest_edge = None
+        min_distance = float("inf")
+        for edge in self.edges.values():
+            mid_x = (edge.vertex1.position[0] + edge.vertex2.position[0]) // 2
+            mid_y = (edge.vertex1.position[1] + edge.vertex2.position[1]) // 2
+            distance = np.hypot(mouse_pos[0] - mid_x, mouse_pos[1] - mid_y)
+            if distance < min_distance and distance < proximity_radius:
+                nearest_edge = edge
+                min_distance = distance
+        return nearest_edge
