@@ -80,8 +80,10 @@ class GameBoard:
             corners = self.get_hex_corners(tile.position)
             pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
         
-    def draw_vertices(self, screen):
+    def draw_vertices(self, screen, highlighted_vertices):
         for vertex in self.vertices.values():
+            if vertex in highlighted_vertices:
+                pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
             if vertex.house:
                 pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
                 pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
@@ -89,8 +91,10 @@ class GameBoard:
                 pass
                 #pygame.draw.circle(screen, (255, 0, 0), vertex.position, 5)
                 
-    def draw_edges(self, screen):
+    def draw_edges(self, screen, highlighted_edges):
         for edge in self.edges.values():
+            if edge in highlighted_edges:
+                pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
             if edge.road:
                 pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
                 pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
@@ -99,7 +103,7 @@ class GameBoard:
                 #pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 2)
         
     # Draw the tiles, vertices and edges
-    def draw(self, screen):
+    def draw(self, screen, highlighted_vertices, highlighted_edges):
         for tile in self.tiles.values():
             image = self.tile_images[tile.resource]
             x, y = self.hex_to_pixel(tile.position)
@@ -112,8 +116,8 @@ class GameBoard:
             if number_image:
                 number_rect = number_image.get_rect(center=(x + self.tile_width // 2, y + self.tile_height // 2))
                 screen.blit(number_image, number_rect.topleft)
-        self.draw_edges(screen)
-        self.draw_vertices(screen)
+        self.draw_edges(screen, highlighted_edges)
+        self.draw_vertices(screen, highlighted_vertices)
         
     # Generate the vertices and edges for the hex grid
     def generate_vertices(self):

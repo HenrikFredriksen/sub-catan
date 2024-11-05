@@ -31,3 +31,9 @@ class GameRules:
                 if self.game_board.edges[tuple(sorted([edge.vertex2.position, neighbor.position]))].road and self.game_board.edges[tuple(sorted([edge.vertex2.position, neighbor.position]))].road.player == player:
                     return True
         return False
+    
+    def starting_settlement_bonus(self, vertex):
+        if vertex.house is None:
+            return False
+        
+        # check adjacent tiles for resources

@@ -13,7 +13,7 @@ class Player:
         self.victory_points = 0
         self.settlements = settlements
         self.roads = roads
-        self.resources = {'wood': 20, 'brick': 20, 'sheep': 5, 'wheat': 5, 'ore': 0}
+        self.resources = {'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 0}
         
     def add_resource(self, resource, amount):
         self.resources[resource] += amount
