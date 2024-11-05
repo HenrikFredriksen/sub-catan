@@ -4,15 +4,16 @@ from game.GameBoard import GameBoard
 from game.GameManager import GameManager
 from game.GameRules import GameRules
 from game.Player import Player
+from assets.Button import Button
 
 def main():
     pygame.init()
-    screen_width, screen_heigth = 1000, 800
-    screen = pygame.display.set_mode((screen_width, screen_heigth))
+    screen_width, screen_height = 1000, 800
+    screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("Catan")
     
     board = GameBoard()
-    board.set_screen_dimensions(screen_width, screen_heigth)
+    board.set_screen_dimensions(screen_width, screen_height)
     rules = GameRules(board)
     
      # Initialize players
@@ -43,6 +44,13 @@ def main():
     pygame.font.init()
     font = pygame.font.SysFont(None, 24)
 
+
+    change_player_button = Button(
+        x=10, y=screen_height - 50, width=150, height=40,
+        text="Change Player", font=font, color=(200, 200, 200), hover_color=(150, 150, 150),
+        action=manager.change_player
+    )
+    
     running = True
     while running:
         for event in pygame.event.get():
@@ -51,10 +59,13 @@ def main():
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                manager.handle_click(mouse_pos)
+                if not change_player_button.is_clicked(event):
+                    manager.handle_click(mouse_pos)
 
         screen.fill((100, 140, 250))
         board.draw(screen)
+        
+        change_player_button.draw(screen)
             
         mouse_pos = pygame.mouse.get_pos()
         mouse_pos_text = f"Mouse Position: {mouse_pos}"
