@@ -68,7 +68,7 @@ class GameBoard:
     def draw_vertices(self, screen):
         for vertex in self.vertices.values():
             if vertex.house:
-                pygame.draw.circle(screen, (0, 255, 0), vertex.position, 8)
+                pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
             else:
                 pass
                 #pygame.draw.circle(screen, (255, 0, 0), vertex.position, 5)
@@ -76,7 +76,7 @@ class GameBoard:
     def draw_edges(self, screen):
         for edge in self.edges.values():
             if edge.road:
-                pygame.draw.line(screen, (0, 255, 0), edge.vertex1.position, edge.vertex2.position, 4)
+                pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
             else:
                 pass
                 #pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 2)
