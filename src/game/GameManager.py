@@ -3,12 +3,17 @@ from game.Road import Road
 import numpy as np
 
 class GameManager:
-    def __init__(self, game_board, game_rules):
+    def __init__(self, game_board, game_rules, players):
         self.game_board = game_board
         self.game_rules = game_rules
-        self.current_player = 1
+        self.players = players
+        self.current_player_index = 0
         self.game_over = False
         
+    @property
+    def current_player(self):
+        return self.players[self.current_player_index]
+    
     def handle_click(self, mouse_pos):
         print(f"Mouse clicked at: {mouse_pos}")
         proximity_radius = self.game_board.hex_size / 4
@@ -34,18 +39,20 @@ class GameManager:
 
     def place_house(self, vertex):
         print(f"Nearest vertex: {vertex.position}")
-        if self.game_rules.is_valid_house_placement(vertex):
+        if self.current_player.can_build_settlement() and self.game_rules.is_valid_house_placement(vertex):
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
+            self.current_player.settlements -= 1
             print(f"Placed house at {vertex.position}")
         else:
             print("Invalid House placement")
             
     def place_road(self, edge):
         print(f"Nearest edge: {edge.vertex1.position} - {edge.vertex2.position}")
-        if self.game_rules.is_valid_road_placement(edge, self.current_player):
+        if self.current_player.can_build_road() and self.game_rules.is_valid_road_placement(edge, self.current_player):
             road = Road(vertex1=edge.vertex1, vertex2=edge.vertex2, player=self.current_player)
             edge.road = road
+            self.current_player.roads -= 1
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
         else:
             print("Invalid Road placement")

@@ -3,6 +3,7 @@ import numpy as np
 from game.GameBoard import GameBoard
 from game.GameManager import GameManager
 from game.GameRules import GameRules
+from game.Player import Player
 
 def main():
     pygame.init()
@@ -13,7 +14,13 @@ def main():
     board = GameBoard()
     board.set_screen_dimensions(screen_width, screen_heigth)
     rules = GameRules(board)
-    manager = GameManager(board, rules)
+    
+     # Initialize players
+    player1 = Player(color=(255, 0, 0), settlements=5, roads=15)  # Red player
+    player2 = Player(color=(0, 0, 255), settlements=5, roads=15)  # Blue player
+    players = [player1, player2]
+    
+    manager = GameManager(board, rules, players)
 
     board_radius = 2
     resources = ["brick", "wood", "sheep", "wheat", "ore"]
