@@ -8,7 +8,7 @@ from assets.Button import Button
 
 def main():
     pygame.init()
-    screen_width, screen_height = 1000, 800
+    screen_width, screen_height = 1600, 900
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("Catan")
     
@@ -19,7 +19,9 @@ def main():
      # Initialize players
     player1 = Player(color=(255, 0, 0), settlements=5, roads=15)  # Red player
     player2 = Player(color=(0, 0, 255), settlements=5, roads=15)  # Blue player
-    players = [player1, player2]
+    player3 = Player(color=(0, 255, 0), settlements=5, roads=15)  # Green player
+    player4 = Player(color=(255, 255, 0), settlements=5, roads=15)  # Yellow player
+    players = [player1, player2, player3, player4]
     
     manager = GameManager(board, rules, players)
 
@@ -45,10 +47,10 @@ def main():
     font = pygame.font.SysFont(None, 24)
 
 
-    change_player_button = Button(
+    next_turn_button = Button(
         x=10, y=screen_height - 50, width=150, height=40,
-        text="Change Player", font=font, color=(200, 200, 200), hover_color=(150, 150, 150),
-        action=manager.change_player
+        text="Next turn", font=font, color=(200, 200, 200), hover_color=(150, 150, 150),
+        action=manager.update
     )
     
     running = True
@@ -59,25 +61,29 @@ def main():
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                if not change_player_button.is_clicked(event):
+                if not next_turn_button.is_clicked(event):
                     manager.handle_click(mouse_pos)
 
         screen.fill((100, 140, 250))
         board.draw(screen)
         
-        change_player_button.draw(screen)
+        next_turn_button.draw(screen)
+        turn_text = f"Turn: {manager.turn}"
+        turn_text_surface = font.render(turn_text, True, (255, 255, 255))
+        screen.blit(turn_text_surface, (10, screen_height - 80))
             
         mouse_pos = pygame.mouse.get_pos()
         mouse_pos_text = f"Mouse Position: {mouse_pos}"
         mouse_pos_text_surface = font.render(mouse_pos_text, True, (255, 255, 255))
         screen.blit(mouse_pos_text_surface, (10, 10))
         
-        resources_text_p1 = f"Player 1: {player1.victory_points}, {player1.resources}"
-        resources_text_p2 = f"Player 2: {player2.victory_points}, {player2.resources}"
-        resources_text_surface_p1 = font.render(resources_text_p1, True, (0,0,0))
-        resources_text_surface_p2 = font.render(resources_text_p2, True, (0,0,0))
-        screen.blit(resources_text_surface_p1, (screen_width // 4, 10))
-        screen.blit(resources_text_surface_p2, (screen_width // 4, screen_height - 30))
+        y_offset = 30
+        for player in players:
+            resources_text = f"{player.color}: {player.resources} : VP:{player.victory_points}"
+            resources_text_surface = font.render(resources_text, True, (0,0,0))
+            screen.blit(resources_text_surface, (10, y_offset))
+            y_offset += 20
+        
         
         pygame.display.flip()
 

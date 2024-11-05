@@ -25,3 +25,6 @@ class Tile:
         
     def get_number_image(self):
         return self.number_images.get(self.number)
+    
+    def get_number(self):
+        return self.number

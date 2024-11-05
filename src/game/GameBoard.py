@@ -47,6 +47,12 @@ class GameBoard:
         y = size * (3/2) * hex_coord.r
         return x + self.screen_width // 2, y + self.screen_height // 2
     
+    def pixel_to_hex(self, x, y):
+        size = self.hex_size
+        q = (np.sqrt(3)/3 * x  -  1/3 * y) / size
+        r = (2/3 * y) / size
+        return HexCoordinate(q, r)
+    
     def get_hex_corners(self, hex_coord):
         corners = []
         center_x, center_y = self.hex_to_pixel(hex_coord)
@@ -58,6 +64,15 @@ class GameBoard:
             y = center_y + self.hex_size * np.sin(angle_rad)
             corners.append((x, y))
         return corners
+    
+    def get_tile_vertices(self, tile):
+        corners = self.get_hex_corners(tile.position)
+        vertices = []
+        for corner in corners:
+            corner_int = (int(round(corner[0])), int(round(corner[1])))
+            if corner_int in self.vertices:
+                vertices.append(self.vertices[corner_int])
+        return vertices
         
     # Only for debugging
     def draw_grid(self, screen):
