@@ -16,6 +16,7 @@ class GameManager:
         self.highlighted_edges = []
         self.starting_sub_phase = 'house'
         self.starting_phase_players_stack = self.players + self.players[::-1]
+        self.settlement_count = {player: 0 for player in self.players}
 
         
     @property
@@ -77,6 +78,13 @@ class GameManager:
                     if vertex.house:
                         self.console.log(f"{vertex.house.player.get_color()} collected {tile.resource}")
                         vertex.house.player.add_resource(tile.resource, 1)
+                        
+    def settlement_bonus(self, vertex):
+        adjacent_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
+        for tile in adjacent_tiles:
+            if tile.resource == 'desert':
+                continue
+            vertex.house.player.add_resource(tile.resource, 1)
     
     def handle_click(self, mouse_pos):
         print(f"Mouse clicked at: {mouse_pos}")
@@ -139,6 +147,12 @@ class GameManager:
             self.current_player.resources['sheep'] -= 1
             self.current_player.resources['wheat'] -= 1
             print(f"Placed house at {vertex.position}")
+            
+            # check if house is the second one placed, if so, give settlement bonus
+            self.settlement_count[self.current_player] += 1
+            if self.settlement_count[self.current_player] == 2:
+                self.game_rules.starting_settlement_bonus(vertex)
+                self.settlement_bonus(vertex)
         else:
             print(f"Invalid House placement: Player has resources? {self.current_player.can_build_settlement()} House already placed? {vertex.house}")
             
