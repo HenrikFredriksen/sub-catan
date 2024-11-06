@@ -74,8 +74,11 @@ class GameManager:
                 for vertex in self.game_board.get_tile_vertices(tile):
                     # check if there is a house on the vertex
                     if vertex.house:
-                        self.console.log(f"{vertex.house.player.get_color()} collected {tile.resource}")
+                        self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource}")
                         vertex.house.player.add_resource(tile.resource, 1)
+                    elif vertex.city:
+                        self.console.log(f"{vertex.city.player.get_color()} collected 2 {tile.resource}")
+                        vertex.city.player.add_resource(tile.resource, 2)
                         
     def settlement_bonus(self, vertex):
         adjacent_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
