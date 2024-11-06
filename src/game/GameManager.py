@@ -4,7 +4,6 @@ import numpy as np
 
 class GameManager:
     def __init__(self, game_board, game_rules, players, console):
-        # turn 0 is the starting phase
         self.turn = 0
         self.game_board = game_board
         self.game_rules = game_rules
@@ -14,6 +13,7 @@ class GameManager:
         self.game_over = False
         self.highlighted_vertecies = []
         self.highlighted_edges = []
+        self.gamestate = 'settle_phase'
         self.starting_sub_phase = 'house'
         self.starting_phase_players_stack = self.players + self.players[::-1]
         self.settlement_count = {player: 0 for player in self.players}
@@ -28,7 +28,7 @@ class GameManager:
         self.update()
         
     def update(self):
-        if self.turn == 0:
+        if self.gamestate == 'settle_phase':
             self.console.log("Starting phase")
             self.starting_phase()
         else:
@@ -44,11 +44,6 @@ class GameManager:
         if self.game_over:
             return
         
-        if self.turn == 1:
-            self.console.log("Normal phase")
-        else:
-            self.change_player()
-                
         roll = self.roll_dice()
         if roll == 7:
             #implement robber
@@ -59,6 +54,8 @@ class GameManager:
             self.check_tile_resources(roll)
             print(f"Resources collected for roll {roll}")
             
+        if self.turn >= 1:
+            self.change_player()         
         self.turn += 1
          
     def starting_phase(self):
@@ -93,7 +90,7 @@ class GameManager:
         nearest_vertex = self.game_board.find_nearest_vertex(mouse_pos, proximity_radius)
         nearest_edge = self.game_board.find_nearest_edge(mouse_pos, proximity_radius)
         
-        if self.turn == 0:
+        if self.gamestate == 'settle_phase':
             if self.starting_sub_phase == 'house' and nearest_vertex:
                 self.place_house(nearest_vertex)
                 self.console.log(f"{self.current_player.get_color()} placed a house")
@@ -109,8 +106,8 @@ class GameManager:
                 if self.current_player_index < len(self.starting_phase_players_stack):
                     self.starting_phase()
                 if self.current_player_index >= len(self.starting_phase_players_stack):
-                    self.turn += 1
                     self.current_player_index = 0
+                    self.gamestate = 'normal_phase'
                     self.update()
         
         else:
@@ -185,11 +182,11 @@ class GameManager:
     def find_available_house_locations(self):
         self.highlighted_vertecies = []
         for vertex in self.game_board.vertices.values():
-            if self.turn == 0:
+            if self.gamestate == 'settle_phase':
                 if self.game_rules.is_valid_house_placement(vertex):
                     self.highlighted_vertecies.append(vertex)
             #this could be optimized further
-            elif self.turn >= 1:
+            elif self.gamestate == 'normal_phase':
                 if self.game_rules.is_valid_house_placement(vertex) and self.current_player.can_build_settlement():
                     self.highlighted_vertecies.append(vertex)
         print(f"Available house locations: {len(self.highlighted_vertecies)}")
