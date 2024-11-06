@@ -1,4 +1,5 @@
 from game.House import House
+from game.City import City
 from game.Road import Road
 import numpy as np
 
@@ -119,12 +120,18 @@ class GameManager:
                     mouse_pos[1] - (nearest_edge.vertex1.position[1] + nearest_edge.vertex2.position[1]) // 2)
                 
                 if vertex_distance < edge_distance:
-                    self.place_house(nearest_vertex)
+                    if nearest_vertex.house:
+                        self.place_city(nearest_vertex)
+                    else:
+                        self.place_house(nearest_vertex)
                 else:
                     self.place_road(nearest_edge)
                     
             elif nearest_vertex:
-                self.place_house(nearest_vertex)
+                if nearest_vertex.house:
+                    self.place_city(nearest_vertex)
+                else:
+                    self.place_house(nearest_vertex)
             elif nearest_edge:
                 self.place_road(nearest_edge)
             else:
@@ -152,6 +159,24 @@ class GameManager:
                 self.settlement_bonus(vertex)
         else:
             print(f"Invalid House placement: Player has resources? {self.current_player.can_build_settlement()} House already placed? {vertex.house}")
+
+    def place_city(self, vertex):
+        print(f"Nearest vertex: {vertex.position}")
+        if (self.current_player.can_build_city() 
+            and self.game_rules.is_valid_city_placement(vertex, self.current_player)
+            ):
+            city = City(vertex=vertex, player=self.current_player)
+            vertex.city = city
+            vertex.house = None
+            self.current_player.cities -= 1
+            self.current_player.settlements += 1
+            self.current_player.resources['wheat'] -= 2
+            self.current_player.resources['ore'] -= 3
+            self.current_player.victory_points += 1
+            self.console.log(f"{self.current_player.get_color()} built a city +1VP")
+            print(f"Placed city at {vertex.position}")
+        else:
+            print(f"Invalid City placement: Player has resources? {self.current_player.can_build_city()} City already placed? {vertex.city}")
             
     def place_road(self, edge):
         print(f"Nearest edge: {edge.vertex1.position} - {edge.vertex2.position}")
@@ -197,6 +222,13 @@ class GameManager:
             if self.game_rules.is_valid_road_placement(edge, self.current_player):
                 self.highlighted_edges.append(edge)
         print(f"Available road locations: {len(self.highlighted_edges)}")
+
+    def find_available_city_locations(self):
+        self.highlighted_vertecies = []
+        for vertex in self.game_board.vertices.values():
+            if self.game_rules.is_valid_city_placement(vertex, self.current_player):
+                self.highlighted_vertecies.append(vertex)
+        print(f"Available city locations: {len(self.highlighted_vertecies)}")
         
     def remove_highlighted_locations(self):
         self.highlighted_vertecies = []

@@ -8,11 +8,12 @@ class Player:
     }
     
     
-    def __init__(self, color, settlements, roads):
+    def __init__(self, color, settlements, roads, cities):
         self.color = color
         self.victory_points = 0
         self.settlements = settlements
         self.roads = roads
+        self.cities = cities
         self.resources = {'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 0}
         
     def add_resource(self, resource, amount):
@@ -34,7 +35,8 @@ class Player:
                 self.resources['brick'] > 0)
         
     def can_build_city(self):
-        return (self.resources['wheat'] >= 2 and
+        return (self.cities > 0 and
+                self.resources['wheat'] >= 2 and
                 self.resources['ore'] >= 3)
     
     def add_victory_points(self, amount):

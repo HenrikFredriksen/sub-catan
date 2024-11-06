@@ -9,7 +9,7 @@ from assets.Console import Console
 
 def main():
     pygame.init()
-    screen_width, screen_height = 1600, 900
+    screen_width, screen_height = 1400, 700
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("Catan")
     
@@ -18,10 +18,10 @@ def main():
     rules = GameRules(board)
     
      # Initialize players
-    player1 = Player(color=(255, 0, 0), settlements=5, roads=15)  # Red player
-    player2 = Player(color=(0, 0, 255), settlements=5, roads=15)  # Blue player
-    player3 = Player(color=(20, 220, 20), settlements=5, roads=15)  # Green player
-    player4 = Player(color=(255, 165, 0), settlements=5, roads=15)  # Orange player
+    player1 = Player(color=(255, 0, 0), settlements=5, roads=15, cities=4)  # Red player
+    player2 = Player(color=(0, 0, 255), settlements=5, roads=15, cities=4)  # Blue player
+    player3 = Player(color=(20, 220, 20), settlements=5, roads=15, cities=4)  # Green player
+    player4 = Player(color=(255, 165, 0), settlements=5, roads=15, cities=4)  # Orange player
     players = [player1, player2, player3, player4]
     
     pygame.font.init()
