@@ -8,7 +8,7 @@ import numpy as np
 
 class GameBoard:
     def __init__(self):
-        self.hex_size = 100
+        self.hex_size = 80
         self.tiles = {}
         self.vertices = {}
         self.edges = {}
@@ -93,9 +93,13 @@ class GameBoard:
             if vertex in highlighted_vertices:
                 pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
                 
-            if vertex.house:
+            elif vertex.house:
                 pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
                 pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
+            
+            elif vertex.city:
+                pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
+                pygame.draw.rect(screen, vertex.city.player.color, (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
                 
     def draw_edges(self, screen, highlighted_edges):
         for edge in self.edges.values():

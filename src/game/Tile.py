@@ -6,7 +6,7 @@ class Tile:
         self.resource = resource
         self.number = number
         self.position = position # HexCoordinate
-        self.number_size = 60
+        self.number_size = 45
         
         base_path = os.path.join(os.path.dirname(__file__), '../../img/numbers')
         
