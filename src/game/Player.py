@@ -32,6 +32,10 @@ class Player:
         return (self.roads > 0 and
                 self.resources['wood'] > 0 and
                 self.resources['brick'] > 0)
+        
+    def can_build_city(self):
+        return (self.resources['wheat'] >= 2 and
+                self.resources['ore'] >= 3)
     
     def add_victory_points(self, amount):
         self.victory_points += amount

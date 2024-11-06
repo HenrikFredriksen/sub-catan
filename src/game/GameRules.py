@@ -36,4 +36,5 @@ class GameRules:
         if vertex.house is None:
             return False
         
-        # check adjacent tiles for resources
+    def is_valid_city_placement(self, vertex, player):
+        return vertex.house is not None and vertex.house.player == player
