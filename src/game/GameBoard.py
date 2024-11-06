@@ -18,12 +18,12 @@ class GameBoard:
         
         base_path = os.path.join(os.path.dirname(__file__), '../../img/terrainHexes')
         self.tile_images = {
-            "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), (self.tile_width, self.tile_height)),
-            "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), (self.tile_width, self.tile_height)),
-            "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), (self.tile_width, self.tile_height)),
-            "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), (self.tile_width, self.tile_height)),
-            "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), (self.tile_width, self.tile_height)),
-            "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), (self.tile_width, self.tile_height))
+            "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), (self.tile_width*1.02, self.tile_height*1.02)),
+            "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), (self.tile_width*1.02, self.tile_height*1.02)),
+            "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), (self.tile_width*1.02, self.tile_height*1.02)),
+            "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), (self.tile_width*1.02, self.tile_height*1.02)),
+            "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), (self.tile_width*1.02, self.tile_height*1.02)),
+            "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), (self.tile_width*1.02, self.tile_height*1.02))
         }
         
     def add_tile(self, resource, number, q, r):
