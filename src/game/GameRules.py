@@ -4,7 +4,7 @@ class GameRules:
         self.game_board = game_board
         
     def is_valid_house_placement(self, vertex, player, phase):
-        if vertex.house is not None:
+        if vertex.house is not None or vertex.city is not None:
             return False
         
         # check if there is a house on any of the neighbors
