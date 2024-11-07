@@ -35,8 +35,7 @@ class GameManager:
             self.starting_phase()
         else:
             self.normal_phase()
-            self.find_available_house_locations()
-            self.find_available_city_locations()
+            self.find_available_house__and_city_locations()
             self.find_available_road_locations()
             
     def normal_phase(self):
@@ -65,13 +64,23 @@ class GameManager:
          
     def starting_phase(self):
         if self.starting_sub_phase == 'house':
-            self.find_available_house_locations()
+            self.find_available_house__and_city_locations()
             self.console.log(f"{self.current_player.get_color()}'s turn, place a house")
         elif self.starting_sub_phase == 'road':
             self.find_available_road_locations()
             self.console.log(f"{self.current_player.get_color()}'s turn, place a road")
-            
-            
+               
+    def change_player(self):
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
+        
+    def roll_dice(self):
+        dice1 = np.random.randint(1, 7)
+        dice2 = np.random.randint(1, 7)
+        self.console.log(f"Dice rolled: {dice1}, {dice2}")
+        print(f"Dice rolled: {dice1}, {dice2}")
+        return dice1 + dice2
+
     def check_tile_resources(self, roll):
         for tile in self.game_board.tiles.values():
             if tile.get_number() == roll:
@@ -166,7 +175,8 @@ class GameManager:
             self.current_player.resources['wheat'] -= 1
             
             # update the highlighted locations
-            self.find_available_house_locations()
+            self.find_available_road_locations()
+            self.find_available_house__and_city_locations()
             
             print(f"Placed house at {vertex.position}")
             
@@ -199,7 +209,8 @@ class GameManager:
             self.current_player.victory_points += 1
             
             # update the highlighted locations
-            self.find_available_city_locations()
+            self.find_available_road_locations()
+            self.find_available_house__and_city_locations()
             
             self.console.log(f"{self.current_player.get_color()} built a city +1VP")
             print(f"Placed city at {vertex.position}")
@@ -219,13 +230,13 @@ class GameManager:
             road = Road(vertex1=edge.vertex1, vertex2=edge.vertex2, player=self.current_player)
             edge.road = road
             
-            
             self.current_player.roads -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
             
             # update the highlighted locations
             self.find_available_road_locations()
+            self.find_available_house__and_city_locations()
             
             self.console.log(f"{self.current_player.get_color()} built a road")
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
@@ -233,19 +244,8 @@ class GameManager:
             print(f"Invalid Road placement:\n" +
                   f"Player has resources? {self.current_player.can_build_road()}\n" +
                   f"nRoad already placed? {edge.road}")
-            
-    def change_player(self):
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
-        print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
         
-    def roll_dice(self):
-        dice1 = np.random.randint(1, 7)
-        dice2 = np.random.randint(1, 7)
-        self.console.log(f"Dice rolled: {dice1}, {dice2}")
-        print(f"Dice rolled: {dice1}, {dice2}")
-        return dice1 + dice2
-        
-    def find_available_house_locations(self):
+    def find_available_house__and_city_locations(self):
         self.highlighted_vertecies = []
         for vertex in self.game_board.vertices.values():
             if self.gamestate == 'settle_phase':
@@ -256,10 +256,15 @@ class GameManager:
                     self.highlighted_vertecies.append(vertex)
             #this could be optimized further
             elif self.gamestate == 'normal_phase':
+                # house placement
                 if (self.current_player.can_build_settlement() and 
                     self.game_rules.is_valid_house_placement(vertex, 
                                                              self.current_player, 
                                                              self.gamestate)):
+                    self.highlighted_vertecies.append(vertex)
+                # city placement
+                elif (self.current_player.can_build_city() and 
+                      self.game_rules.is_valid_city_placement(vertex, self.current_player)):
                     self.highlighted_vertecies.append(vertex)
         print(f"Available house locations: {len(self.highlighted_vertecies)}")
         
@@ -273,15 +278,6 @@ class GameManager:
                                                        self.last_placed_house_vertex.get(self.current_player))):
                 self.highlighted_edges.append(edge)
         print(f"Available road locations: {len(self.highlighted_edges)}")
-
-    def find_available_city_locations(self):
-        self.highlighted_vertecies = []
-        for vertex in self.game_board.vertices.values():
-            if (self.current_player.can_build_city() and 
-                self.game_rules.is_valid_city_placement(vertex, self.current_player)):
-                self.highlighted_vertecies.append(vertex)
-                
-        print(f"Available city locations: {len(self.highlighted_vertecies)}")
         
     def remove_highlighted_locations(self):
         self.highlighted_vertecies = []
