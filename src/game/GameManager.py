@@ -41,11 +41,9 @@ class GameManager:
     def normal_phase(self):
         for player in self.players:
             if player.victory_points >= 10:
-                print(f"Player {player} wins!")
-                self.console.log(f"Player {player} wins!")
-                self.game_over = True
-        
+                self.player_won_phase()
         if self.game_over:
+            self.console.log("Game over")
             return
         
         roll = self.roll_dice()
@@ -69,6 +67,10 @@ class GameManager:
         elif self.starting_sub_phase == 'road':
             self.find_available_road_locations()
             self.console.log(f"{self.current_player.get_color()}'s turn, place a road")
+
+    def player_won_phase(self):
+        self.console.log(f"Player {self.current_player.get_color()} won the game!")
+        self.game_over = True
                
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
