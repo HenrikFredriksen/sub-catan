@@ -38,6 +38,9 @@ class Player:
         return (self.cities > 0 and
                 self.resources['wheat'] >= 2 and
                 self.resources['ore'] >= 3)
+        
+    def can_trade_with_bank(self, resource):
+        return self.resources[resource] >= 4
     
     def add_victory_points(self, amount):
         self.victory_points += amount
