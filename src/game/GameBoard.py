@@ -18,12 +18,18 @@ class GameBoard:
         
         base_path = os.path.join(os.path.dirname(__file__), '../../img/terrainHexes')
         self.tile_images = {
-            "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), (self.tile_width*1.02, self.tile_height*1.02)),
-            "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), (self.tile_width*1.02, self.tile_height*1.02)),
-            "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), (self.tile_width*1.02, self.tile_height*1.02)),
-            "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), (self.tile_width*1.02, self.tile_height*1.02)),
-            "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), (self.tile_width*1.02, self.tile_height*1.02)),
-            "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), (self.tile_width*1.02, self.tile_height*1.02))
+            "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), 
+                                           (self.tile_width*1.02, self.tile_height*1.02)),
+            "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), 
+                                            (self.tile_width*1.02, self.tile_height*1.02)),
+            "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), 
+                                            (self.tile_width*1.02, self.tile_height*1.02)),
+            "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), 
+                                            (self.tile_width*1.02, self.tile_height*1.02)),
+            "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), 
+                                          (self.tile_width*1.02, self.tile_height*1.02)),
+            "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), 
+                                             (self.tile_width*1.02, self.tile_height*1.02))
         }
         
     def add_tile(self, resource, number, q, r):
@@ -99,7 +105,8 @@ class GameBoard:
             
             elif vertex.city:
                 pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
-                pygame.draw.rect(screen, vertex.city.player.color, (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
+                pygame.draw.rect(screen, vertex.city.player.color, 
+                                 (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
                 
     def draw_edges(self, screen, highlighted_edges):
         for edge in self.edges.values():
@@ -123,7 +130,8 @@ class GameBoard:
             
             number_image = tile.get_number_image()
             if number_image:
-                number_rect = number_image.get_rect(center=(x + self.tile_width // 2, y + self.tile_height // 2))
+                number_rect = number_image.get_rect(center=(x + self.tile_width // 2, 
+                                                            y + self.tile_height // 2))
                 screen.blit(number_image, number_rect.topleft)
         self.draw_edges(screen, highlighted_edges)
         self.draw_vertices(screen, highlighted_vertices)
