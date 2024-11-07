@@ -33,14 +33,17 @@ class GameManager:
         if self.gamestate == 'settle_phase':
             self.console.log("Starting phase")
             self.starting_phase()
-        else:
+        elif self.gamestate == 'normal_phase':
             self.normal_phase()
             self.find_available_house__and_city_locations()
             self.find_available_road_locations()
+        elif self.gamestate == 'player_won':
+            self.player_won_phase()
             
     def normal_phase(self):
         for player in self.players:
             if player.victory_points >= 10:
+                self.gamestate = 'player_won'
                 self.player_won_phase()
         if self.game_over:
             self.console.log("Game over")
