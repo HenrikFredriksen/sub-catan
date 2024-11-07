@@ -85,6 +85,14 @@ class GameManager:
         self.console.log(f"Dice rolled: {dice1}, {dice2}")
         print(f"Dice rolled: {dice1}, {dice2}")
         return dice1 + dice2
+    
+    def trade_with_bank(self, trade_in_resource, get_back_resource):
+        if self.current_player.can_trade_with_bank(trade_in_resource):
+            self.current_player.resources[trade_in_resource] -= 4
+            self.current_player.resources[get_back_resource] += 1
+            self.console.log(f"{self.current_player.get_color()} traded 4 {trade_in_resource} for 1 {get_back_resource}")
+        else:
+            self.console.log(f"{self.current_player.get_color()} does not have enough resources to trade")
 
     def check_tile_resources(self, roll):
         for tile in self.game_board.tiles.values():
