@@ -8,12 +8,13 @@ class Player:
     }
     
     
-    def __init__(self, color, settlements, roads):
+    def __init__(self, color, settlements, roads, cities):
         self.color = color
         self.victory_points = 0
         self.settlements = settlements
         self.roads = roads
-        self.resources = {'wood': 20, 'brick': 20, 'sheep': 5, 'wheat': 5, 'ore': 0}
+        self.cities = cities
+        self.resources = {'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 0}
         
     def add_resource(self, resource, amount):
         self.resources[resource] += amount
@@ -32,6 +33,14 @@ class Player:
         return (self.roads > 0 and
                 self.resources['wood'] > 0 and
                 self.resources['brick'] > 0)
+        
+    def can_build_city(self):
+        return (self.cities > 0 and
+                self.resources['wheat'] >= 2 and
+                self.resources['ore'] >= 3)
+        
+    def can_trade_with_bank(self, resource):
+        return self.resources[resource] >= 4
     
     def add_victory_points(self, amount):
         self.victory_points += amount
@@ -39,8 +48,11 @@ class Player:
     def get_victory_points(self):
         return self.victory_points
     
+    def get_color(self):
+        return self.COLOR_NAMES.get(self.color, str(self.color))
+    
     def __str__(self):
-        color_name = self.COLOR_NAMES.get(self.color, str(self.color))
+        color_name = self.get_color()
         resources_str = ', '.join(f"{resource}: {amount}" for resource, amount in self.resources.items())
         return f"Player {color_name} - VP: {self.victory_points}, {resources_str}"
     
