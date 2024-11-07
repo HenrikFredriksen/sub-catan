@@ -108,8 +108,10 @@ class GameManager:
                 self.starting_sub_phase = 'house'
                 self.remove_highlighted_locations()
                 self.current_player_index += 1
+                
                 if self.current_player_index < len(self.starting_phase_players_stack):
                     self.starting_phase()
+                    
                 if self.current_player_index >= len(self.starting_phase_players_stack):
                     self.current_player_index = 0
                     self.gamestate = 'normal_phase'
@@ -145,7 +147,9 @@ class GameManager:
 
     def place_house(self, vertex):
         print(f"Nearest vertex: {vertex.position}")
-        if self.current_player.can_build_settlement() and self.game_rules.is_valid_house_placement(vertex, self.current_player, self.gamestate):
+        if (self.current_player.can_build_settlement() and 
+            self.game_rules.is_valid_house_placement(vertex, self.current_player, self.gamestate)):
+            
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
                 
@@ -167,7 +171,9 @@ class GameManager:
                 self.game_rules.starting_settlement_bonus(vertex)
                 self.settlement_bonus(vertex)
         else:
-            print(f"Invalid House placement: Player has resources? {self.current_player.can_build_settlement()} House already placed? {vertex.house}")
+            print(f"Invalid House placement:\n" +
+                  f"Player has resources? {self.current_player.can_build_settlement()}\n" + 
+                  f"House already placed? {vertex.house}")
 
     def place_city(self, vertex):
         print(f"Nearest vertex: {vertex.position}")
@@ -185,7 +191,9 @@ class GameManager:
             self.console.log(f"{self.current_player.get_color()} built a city +1VP")
             print(f"Placed city at {vertex.position}")
         else:
-            print(f"Invalid City placement: Player has resources? {self.current_player.can_build_city()} City already placed? {vertex.city}")
+            print(f"Invalid City placement:\n" +
+                  f"Player has resources? {self.current_player.can_build_city()}\n" +
+                  f"City already placed? {vertex.city}")
             
     def place_road(self, edge):
         print(f"Nearest edge: {edge.vertex1.position} - {edge.vertex2.position}")
@@ -203,7 +211,9 @@ class GameManager:
             self.console.log(f"{self.current_player.get_color()} built a road")
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
         else:
-            print(f"Invalid Road placement: Player has resources? {self.current_player.can_build_road()} Road already placed? {edge.road}")
+            print(f"Invalid Road placement:\n" +
+                  f"Player has resources? {self.current_player.can_build_road()}\n" +
+                  f"nRoad already placed? {edge.road}")
             
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)

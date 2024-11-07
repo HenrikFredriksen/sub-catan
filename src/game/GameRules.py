@@ -40,12 +40,22 @@ class GameRules:
                 return True
 
             for neighbor in edge.vertex1.neighbors:
-                if neighbor != edge.vertex2 and self.game_board.edges.get(tuple(sorted([edge.vertex1.position, neighbor.position]))):
-                    if self.game_board.edges[tuple(sorted([edge.vertex1.position, neighbor.position]))].road and self.game_board.edges[tuple(sorted([edge.vertex1.position, neighbor.position]))].road.player == player:
+                if (neighbor != edge.vertex2 and 
+                    self.game_board.edges.get(tuple(sorted([edge.vertex1.position, 
+                                                            neighbor.position])))):
+                    if (self.game_board.edges[tuple(sorted([edge.vertex1.position, 
+                                                            neighbor.position]))].road and 
+                        self.game_board.edges[tuple(sorted([edge.vertex1.position, 
+                                                            neighbor.position]))].road.player == player):
                         return True
             for neighbor in edge.vertex2.neighbors:
-                if neighbor != edge.vertex1 and self.game_board.edges.get(tuple(sorted([edge.vertex2.position, neighbor.position]))):
-                    if self.game_board.edges[tuple(sorted([edge.vertex2.position, neighbor.position]))].road and self.game_board.edges[tuple(sorted([edge.vertex2.position, neighbor.position]))].road.player == player:
+                if (neighbor != edge.vertex1 and 
+                    self.game_board.edges.get(tuple(sorted([edge.vertex2.position, 
+                                                            neighbor.position])))):
+                    if (self.game_board.edges[tuple(sorted([edge.vertex2.position, 
+                                                            neighbor.position]))].road and 
+                        self.game_board.edges[tuple(sorted([edge.vertex2.position, 
+                                                            neighbor.position]))].road.player == player):
                         return True
             return False
     
