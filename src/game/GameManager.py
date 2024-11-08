@@ -100,11 +100,21 @@ class GameManager:
                 for vertex in self.game_board.get_tile_vertices(tile):
                     # check if there is a house on the vertex
                     if vertex.house:
-                        self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource}")
-                        vertex.house.player.add_resource(tile.resource, 1)
+                        # check if the player has max resources
+                        if vertex.house.player.resources.get(tile.resource) < 25:
+                            self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource}")
+                            vertex.house.player.add_resource(tile.resource, 1)
+                        else:
+                            print("Player has max resources")
                     elif vertex.city:
-                        self.console.log(f"{vertex.city.player.get_color()} collected 2 {tile.resource}")
-                        vertex.city.player.add_resource(tile.resource, 2)
+                        if vertex.city.player.resources.get(tile.resource) < 24:
+                            self.console.log(f"{vertex.city.player.get_color()} collected 2 {tile.resource}")
+                            vertex.city.player.add_resource(tile.resource, 2)
+                        elif vertex.city.player.resources.get(tile.resource) == 24:
+                            self.console.log(f"{vertex.city.player.get_color()} collected 1 {tile.resource}")
+                            vertex.city.player.add_resource(tile.resource, 1)
+                        else:
+                            print("Player has max resources")
                         
     def settlement_bonus(self, vertex):
         adjacent_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
