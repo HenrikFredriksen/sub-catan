@@ -3,11 +3,13 @@ from game.HexCoordinate import HexCoordinate
 from game.Tile import Tile
 from game.Vertex import Vertex
 from game.Edge import Edge
-import pygame
+#import pygame
 import numpy as np
 
 class GameBoard:
     def __init__(self):
+        self.screen_width = 1400
+        self.screen_height = 700
         self.hex_size = 80
         self.tiles = {}
         self.vertices = {}
@@ -16,21 +18,22 @@ class GameBoard:
         self.tile_width = int(self.hex_size * np.sqrt(3))
         self.tile_height = int(self.hex_size * 2)
         
-        base_path = os.path.join(os.path.dirname(__file__), '../../img/terrainHexes')
-        self.tile_images = {
-            "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), 
-                                           (self.tile_width*1.02, self.tile_height*1.02)),
-            "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), 
-                                            (self.tile_width*1.02, self.tile_height*1.02)),
-            "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), 
-                                            (self.tile_width*1.02, self.tile_height*1.02)),
-            "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), 
-                                            (self.tile_width*1.02, self.tile_height*1.02)),
-            "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), 
-                                          (self.tile_width*1.02, self.tile_height*1.02)),
-            "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), 
-                                             (self.tile_width*1.02, self.tile_height*1.02))
-        }
+        # NOT RENDERING WHEN TRAINING
+        #base_path = os.path.join(os.path.dirname(__file__), '../../img/terrainHexes')
+        #self.tile_images = {
+        #    "wood": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"forest.png")), 
+        #                                   (self.tile_width*1.02, self.tile_height*1.02)),
+        #    "brick": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"hills.png")), 
+        #                                    (self.tile_width*1.02, self.tile_height*1.02)),
+        #    "sheep": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"pasture.png")), 
+        #                                    (self.tile_width*1.02, self.tile_height*1.02)),
+        #    "wheat": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"field.png")), 
+        #                                    (self.tile_width*1.02, self.tile_height*1.02)),
+        #    "ore": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"mountain.png")), 
+        #                                  (self.tile_width*1.02, self.tile_height*1.02)),
+        #    "desert": pygame.transform.scale(pygame.image.load(os.path.join(base_path,"desert.png")), 
+        #                                     (self.tile_width*1.02, self.tile_height*1.02))
+        #}
         
     def add_tile(self, resource, number, q, r):
         position = HexCoordinate(q, r)
@@ -89,52 +92,52 @@ class GameBoard:
         return adjacent_tiles
         
     # Only for debugging
-    def draw_grid(self, screen):
-        for tile in self.tiles.values():
-            corners = self.get_hex_corners(tile.position)
-            pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
-        
-    def draw_vertices(self, screen, highlighted_vertices):
-        for vertex in self.vertices.values():
-            if vertex in highlighted_vertices:
-                pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
-                
-            elif vertex.house:
-                pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
-                pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
-            
-            elif vertex.city:
-                pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
-                pygame.draw.rect(screen, vertex.city.player.color, 
-                                 (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
-                
-    def draw_edges(self, screen, highlighted_edges):
-        for edge in self.edges.values():
-            if edge in highlighted_edges:
-                pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
-                
-            if edge.road:
-                pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
-                pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
-            
-        
-    # Draw the tiles, vertices and edges
-    def draw(self, screen, highlighted_vertices, highlighted_edges):
-        for tile in self.tiles.values():
-            image = self.tile_images[tile.resource]
-            x, y = self.hex_to_pixel(tile.position)
-            
-            x -= self.tile_width // 2
-            y -= self.tile_height // 2
-            screen.blit(image, (x, y))
-            
-            number_image = tile.get_number_image()
-            if number_image:
-                number_rect = number_image.get_rect(center=(x + self.tile_width // 2, 
-                                                            y + self.tile_height // 2))
-                screen.blit(number_image, number_rect.topleft)
-        self.draw_edges(screen, highlighted_edges)
-        self.draw_vertices(screen, highlighted_vertices)
+    #def draw_grid(self, screen):
+    #    for tile in self.tiles.values():
+    #        corners = self.get_hex_corners(tile.position)
+    #        pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
+    #    
+    #def draw_vertices(self, screen, highlighted_vertices):
+    #    for vertex in self.vertices.values():
+    #        if vertex in highlighted_vertices:
+    #            pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
+    #            
+    #        elif vertex.house:
+    #            pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
+    #            pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
+    #        
+    #        elif vertex.city:
+    #            pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
+    #            pygame.draw.rect(screen, vertex.city.player.color, 
+    #                             (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
+    #            
+    #def draw_edges(self, screen, highlighted_edges):
+    #    for edge in self.edges.values():
+    #        if edge in highlighted_edges:
+    #            pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
+    #            
+    #        if edge.road:
+    #            pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
+    #            pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
+    #        
+    #    
+    ## Draw the tiles, vertices and edges
+    #def draw(self, screen, highlighted_vertices, highlighted_edges):
+    #    for tile in self.tiles.values():
+    #        image = self.tile_images[tile.resource]
+    #        x, y = self.hex_to_pixel(tile.position)
+    #        
+    #        x -= self.tile_width // 2
+    #        y -= self.tile_height // 2
+    #        screen.blit(image, (x, y))
+    #        
+    #        number_image = tile.get_number_image()
+    #        if number_image:
+    #            number_rect = number_image.get_rect(center=(x + self.tile_width // 2, 
+    #                                                        y + self.tile_height // 2))
+    #            screen.blit(number_image, number_rect.topleft)
+    #    self.draw_edges(screen, highlighted_edges)
+    #    self.draw_vertices(screen, highlighted_vertices)
         
     # Generate the vertices and edges for the hex grid
     def generate_vertices(self):

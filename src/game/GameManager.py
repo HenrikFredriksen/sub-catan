@@ -6,6 +6,7 @@ import numpy as np
 class GameManager:
     def __init__(self, game_board, game_rules, players, console):
         self.turn = 0
+        self.max_turns = 400
         self.game_board = game_board
         self.game_rules = game_rules
         self.players = players
@@ -49,6 +50,13 @@ class GameManager:
             self.console.log("Game over")
             return
         
+        self.roll_phase()
+            
+        if self.turn >= 1:
+            self.change_player()         
+        self.turn += 1
+        
+    def roll_phase(self):
         roll = self.roll_dice()
         if roll == 7:
             #implement robber
@@ -58,10 +66,6 @@ class GameManager:
         else:
             self.check_tile_resources(roll)
             print(f"Resources collected for roll {roll}")
-            
-        if self.turn >= 1:
-            self.change_player()         
-        self.turn += 1
          
     def starting_phase(self):
         if self.starting_sub_phase == 'house':
