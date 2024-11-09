@@ -69,7 +69,8 @@ class CatanEnv(AECEnv):
     def calculate_action_space_size(self):
         num_vertices = len(self.game_board.vertices)
         num_edges = len(self.game_board.edges)
-        return num_vertices + num_edges
+        # 1 for passing, num_vertices for placing settlements, num_edges for placing roads
+        return 1 + num_vertices + num_edges 
     
     def calculate_board_state_size(self):
         num_vertices = len(self.game_board.vertices)
@@ -225,7 +226,9 @@ class CatanEnv(AECEnv):
             self.rewards[agent] = -1.0
             self.terminations[agent] = True
         else:
-            if action_type == 'place_settlement':
+            if action_type == 'pass':
+                self.rewards[agent] = 0.0
+            elif action_type == 'place_settlement':
                 vertex_idx = action_param
                 vertex = list(self.game_board.vertices.values())[vertex_idx]
                 self.game_manager.current_player_index = player_idx
@@ -255,14 +258,16 @@ class CatanEnv(AECEnv):
         
     
     def decode_action(self, action):
+        if action == 0:
+            return ('pass', None)
         num_vertices = len(self.game_board.vertices)
-        if 0 <= action < num_vertices:
+        if 1 <= action < num_vertices:
             return ('place_settlement', action)
         else:
-            return ('place_road', action - num_vertices)
+            return ('place_road', action - 1 - num_vertices)
     
     def get_valid_actions(self, agent):
-        valid_actions = []
+        valid_actions = [0] # pass action always valid
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         
