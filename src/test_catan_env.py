@@ -26,7 +26,7 @@ def test_environment():
                 action = np.random.choice(valid_actions)
                 print(f"Taking action: {action}")
             else:
-                action = None
+                action = 0 # skip turn
                 print("No valid actions, skipping action")
                 
         env.step(action)
