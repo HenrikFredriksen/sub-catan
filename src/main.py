@@ -1,7 +1,7 @@
 import pygame
 import numpy as np
 from game.GameBoard import GameBoard
-from game.GameManager import GameManager
+from game.GameManager_pygame import GameManager
 from game.GameRules import GameRules
 from game.Player import Player
 from assets.Button import Button
