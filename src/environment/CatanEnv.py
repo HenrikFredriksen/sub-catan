@@ -227,9 +227,6 @@ class CatanEnv(AECEnv):
         return np.array(enemy_states, dtype=np.float32)
     
     def step(self, action):
-        self.console.log(f"Game state: {self.game_manager.gamestate}")
-        self.console.log(f"Agent {self.agent_selection} performed action {action}")
-        
         if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
             self._was_dead_step(action)
             return
@@ -249,7 +246,7 @@ class CatanEnv(AECEnv):
             self.terminations[agent] = True
         else:
             if action_type == 'pass':
-                self.game_manager.player_passed_turn = True
+                self.game_manager.pass_turn()
                 self.rewards[agent] = -0.1
             elif action_type == 'roll_dice':
                 self.game_manager.roll_phase()
