@@ -103,7 +103,6 @@ class GameManager:
         dice1 = np.random.randint(1, 7)
         dice2 = np.random.randint(1, 7)
         self.console.log(f"Dice rolled: {dice1}, {dice2}")
-        print(f"Dice rolled: {dice1}, {dice2}")
         return dice1 + dice2
     
     def trade_with_bank(self, trade_in_resource, get_back_resource):

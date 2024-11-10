@@ -5,14 +5,16 @@ def test_environment():
     env = CatanEnv()
     env.reset()
     
-    max_steps = 1000
+    max_steps = 100
     step_count = 0
     
     while True:
         agent = env.agent_selection
         obs, rew, termination, truncation, info = env.last()
         done = termination or truncation
+        print(f"Step: {step_count} ------------------------------------------------")
         print(f"Agent: {agent}")
+        print(f"Observation: {obs['player_state']}")
         print(f"Reward: {rew}, Done: {done}")
         
         if done:
