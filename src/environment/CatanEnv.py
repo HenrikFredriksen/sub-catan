@@ -6,11 +6,12 @@ import numpy as np
 import pygame
 
 from game.GameBoard import GameBoard
-from game.GameManager import GameManager
+from game.GameManager_env import GameManager
 from game.GameRules import GameRules
 from game.Player import Player
 from assets.Console import Console
 from assets.PrintConsole import PrintConsole
+from environment.CustomAgentSelector import CustomAgentSelector
 
 def env(render_mode=None):
     internal_render_mode = render_mode if render_mode != "ansi" else "human"
@@ -32,6 +33,10 @@ class CatanEnv(AECEnv):
         self.agents = ['player1', 'player2', 'player3', 'player4']
         self.possible_agents = self.agents[:]
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
+        
+        self.starting_phase_agents_order = self.agents + self.agents[::-1]
+        self.in_starting_phase = True
+        
         self._agent_selector = agent_selector(self.agents)
         
         self.game_board = GameBoard()
@@ -53,6 +58,8 @@ class CatanEnv(AECEnv):
             self.console = PrintConsole()
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
+        self.vertices_list = list(self.game_board.vertices.values())
+        self.edges_list = list(self.game_board.edges.values())
         
         self.action_spaces = {agent: spaces.Discrete(self.calculate_action_space_size()) for agent in self.agents}
         
@@ -66,11 +73,16 @@ class CatanEnv(AECEnv):
         
         self.render_mode = render_mode
         
+        self.game_manager.gamestate = 'settle_phase'
+        
+        self.pass_action_index = 0
+        self.roll_dice_action_index = 1
+        
     def calculate_action_space_size(self):
-        num_vertices = len(self.game_board.vertices)
-        num_edges = len(self.game_board.edges)
-        # 1 for passing, num_vertices for placing settlements, num_edges for placing roads
-        return 1 + num_vertices + num_edges 
+        num_vertices = len(self.vertices_list)
+        num_edges = len(self.edges_list)
+        # 1 for passing, 1 for dice throw, num_vertices for placing settlements and cities, num_edges for placing roads
+        return 2 + num_vertices + num_vertices + num_edges 
     
     def calculate_board_state_size(self):
         num_vertices = len(self.game_board.vertices)
@@ -86,7 +98,10 @@ class CatanEnv(AECEnv):
     
     def reset(self, seed=None, return_info=False, options=False):
         self.agents = self.possible_agents[:]
-        self._agent_selector = agent_selector(self.agents)
+        self.starting_phase_agents_order = self.agents + self.agents[::-1]
+        self.in_starting_phase = True
+        self._agent_selector = CustomAgentSelector(self.starting_phase_agents_order)
+        
         self.game_board = GameBoard()
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
@@ -98,13 +113,17 @@ class CatanEnv(AECEnv):
         ]
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
+        self.vertices_list = list(self.game_board.vertices.values())
+        self.edges_list = list(self.game_board.edges.values())
         
         self.rewards = {agent: 0 for agent in self.agents}
         self._cumulative_rewards = {agent: 0.0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
+        
         self.agent_selection = self._agent_selector.next()
+
         
         self.last_victory_points = {agent: 0 for agent in self.agents}
         
@@ -208,6 +227,8 @@ class CatanEnv(AECEnv):
         return np.array(enemy_states, dtype=np.float32)
     
     def step(self, action):
+        self.console.log(f"Game state: {self.game_manager.gamestate}")
+        self.console.log(f"Agent {self.agent_selection} performed action {action}")
         
         if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
             self._was_dead_step(action)
@@ -216,6 +237,7 @@ class CatanEnv(AECEnv):
         agent = self.agent_selection
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
+        self.game_manager.current_player_index = player_idx
         
         self._cumulative_rewards[agent] = 0.0
         
@@ -227,66 +249,144 @@ class CatanEnv(AECEnv):
             self.terminations[agent] = True
         else:
             if action_type == 'pass':
+                self.game_manager.player_passed_turn = True
+                self.rewards[agent] = -0.1
+            elif action_type == 'roll_dice':
+                self.game_manager.roll_phase()
                 self.rewards[agent] = 0.0
+                # IDEA: reward for getting resources? penalty for not getting resources?
             elif action_type == 'place_settlement':
                 vertex_idx = action_param
-                vertex = list(self.game_board.vertices.values())[vertex_idx]
-                self.game_manager.current_player_index = player_idx
+                vertex = self.vertices_list[vertex_idx]
                 self.game_manager.place_house(vertex)
+            
+            elif action_type == 'place_city':
+                vertex_idx = action_param
+                vertex = self.vertices_list[vertex_idx]
+                self.game_manager.place_city(vertex)
+            
             elif action_type == 'place_road':
                 edge_idx = action_param
-                edge = list(self.game_board.edges.values())[edge_idx]
-                self.game_manager.current_player_index = player_idx
+                edge = self.edges_list[edge_idx]
                 self.game_manager.place_road(edge)
-            # Implement city building later, or other actions
-            
+
             reward = self.calculate_reward(agent)
             self.rewards[agent] = reward
-            
+
+            if self.game_manager.game_over:
+                self.terminations = {agent: True for agent in self.agents}
+                
             self.truncations = {
                 agent: self.game_manager.turn >= self.game_manager.max_turns for agent in self.agents
             }
-                        
-        if self.game_manager.game_over:
-            self.terminations = {agent: True for agent in self.agents}
-            
-        self.agent_selection = self._agent_selector.next()
-        self._accumulate_rewards()
         
+        if self.in_starting_phase:
+            self.agent_selection = self._agent_selector.next()
+            if self.agent_selection is None:
+                # Starting phase is over
+                self.in_starting_phase = False
+                self._agent_selector = agent_selector(self.agents)
+                self.agent_selection = self._agent_selector.next()
+        else:
+            if self.game_manager.is_turn_over():
+                self.game_manager.player_passed_turn = False
+                self.agent_selection = self._agent_selector.next()
+            else:
+                self.agent_selection = agent
+                        
+        self._accumulate_rewards()
+                    
         if self.render_mode == "human":
             self.render()
         
     
     def decode_action(self, action):
-        if action == 0:
+        if action == self.pass_action_index:
             return ('pass', None)
-        num_vertices = len(self.game_board.vertices)
-        if 1 <= action < num_vertices:
-            return ('place_settlement', action)
+        elif action == self.roll_dice_action_index:
+            return ('roll_dice', None)
         else:
-            return ('place_road', action - 1 - num_vertices)
+            action -= 2 # pass and roll dice actions
+            num_vertices = len(self.vertices_list)
+            num_edges = len(self.edges_list)
+            if 0 <= action < num_vertices:
+                # build settlement
+                return ('place_settlement', action)
+            elif num_vertices <= action < 2 * num_vertices:
+                # build city
+                vertex_idx = action - num_vertices
+                return ('place_city', vertex_idx)
+            else:
+                # build road
+                edge_idx = action - 2 * num_vertices
+                return ('place_road', edge_idx)
     
     def get_valid_actions(self, agent):
-        valid_actions = [0] # pass action always valid
+        if self.in_starting_phase:
+            return self.get_settle_phase_actions(agent)
+        else:
+            return self.get_normal_phase_actions(agent)
+    
+    def get_settle_phase_actions(self, agent):
+        valid_actions = [] 
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
+        self.game_manager.current_player_index = player_idx
         
-        num_vertices = len(self.game_board.vertices)
-        num_edges = len(self.game_board.edges)
+        self.game_manager.find_available_house__and_city_locations()
+        self.game_manager.find_available_road_locations()
         
-        # Check if the player can build a house or road on any of the vertices or edges
-        # Implement city building later
-        for idx, vertex in enumerate(self.game_board.vertices.values()):
-            if (self.game_rules.is_valid_house_placement(vertex, player, self.game_manager.gamestate) and
-                player.can_build_settlement()):
-                valid_actions.append(idx)
+        num_vertices = len(self.vertices_list)
+        
+        if self.game_manager.starting_sub_phase == 'house':
+            for vertex in self.game_manager.highlighted_vertecies:
+                idx = self.vertices_list.index(vertex)
+                action = 2 + idx # 2 for pass and roll dice actions
+                valid_actions.append(action)
+            
+        elif self.game_manager.starting_sub_phase == 'road':    
+            for edge in self.game_manager.highlighted_edges:
+                idx = self.edges_list.index(edge)
+                # 2 for pass and roll dice actions, 2 * num_vertices for placing settlements
+                action = 2 + 2 * num_vertices + idx 
+                valid_actions.append(action)
                 
-        for idx, edge in enumerate(self.game_board.edges.values()):
-            if (self.game_rules.is_valid_road_placement(edge, player, self.game_manager.gamestate) and
-                player.can_build_road()):
-                valid_actions.append(num_vertices + idx)
-
         return valid_actions
+    
+    def get_normal_phase_actions(self, agent):
+        valid_actions = [self.pass_action_index] # pass action always valid
+        player_idx = self.agent_name_mapping[agent]
+        player = self.players[player_idx]
+        self.game_manager.current_player_index = player_idx
+        
+        if not self.game_manager.dice_rolled:
+            valid_actions.append(self.roll_dice_action_index)
+            return valid_actions
+        else:
+            self.game_manager.find_available_house__and_city_locations()
+            self.game_manager.find_available_road_locations()
+            
+            num_vertices = len(self.vertices_list)
+            
+            for vertex in self.game_manager.highlighted_vertecies:
+                idx = self.vertices_list.index(vertex)
+                if vertex.house is None and vertex.city is None:
+                    action = 2 + idx
+                    valid_actions.append(action)
+                elif vertex.house is not None and vertex.house.player == player and vertex.city is None:
+                    action = 2 + num_vertices + idx
+                    valid_actions.append(action)
+                    
+            for edge in self.game_manager.highlighted_edges:
+                idx = self.edges_list.index(edge)
+                action = 2 + 2 * num_vertices + idx
+                valid_actions.append(action)
+                
+            return valid_actions
+                    
+                    
+            
+            
     
     def calculate_reward(self, agent):
         player_idx = self.agent_name_mapping[agent]
