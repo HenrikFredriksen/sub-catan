@@ -6,7 +6,7 @@ import numpy as np
 class GameManager:
     def __init__(self, game_board, game_rules, players, console):
         self.turn = 0
-        self.max_turns = 400
+        self.max_turns = 1000
         self.game_board = game_board
         self.game_rules = game_rules
         self.players = players
@@ -28,36 +28,7 @@ class GameManager:
     def current_player(self):
         return (self.starting_phase_players_stack[self.current_player_index] if self.turn == 0 
                 else self.players[self.current_player_index])
-    
-    def start_game(self):
-        self.update()
-        
-    def update(self):
-        if self.gamestate == 'settle_phase':
-            self.console.log("Starting phase")
-            self.starting_phase()
-        elif self.gamestate == 'normal_phase':
-            self.normal_phase()
-            self.find_available_house__and_city_locations()
-            self.find_available_road_locations()
-        elif self.gamestate == 'player_won':
-            self.player_won_phase()
-            
-    def normal_phase(self):
-        for player in self.players:
-            if player.victory_points >= 10:
-                self.gamestate = 'player_won'
-                self.player_won_phase()
-        if self.game_over:
-            self.console.log("Game over")
-            return
-        
-        self.roll_phase()
-            
-        if self.turn >= 1:
-            self.change_player()         
-        self.turn += 1
-        
+
     def roll_phase(self):
         if not self.dice_rolled:
             roll = self.roll_dice()
@@ -78,22 +49,22 @@ class GameManager:
         
         
     def pass_turn(self):
-        self.player_passed_turn = True
-        self.dice_rolled = False
-        self.console.log(f"{self.current_player.get_color()} passed their turn")
-        
-        
-    def starting_phase(self):
-        if self.starting_sub_phase == 'house':
-            self.find_available_house__and_city_locations()
-            self.console.log(f"{self.current_player.get_color()}'s turn, place a house")
-        elif self.starting_sub_phase == 'road':
-            self.find_available_road_locations()
-            self.console.log(f"{self.current_player.get_color()}'s turn, place a road")
+        if self.dice_rolled:
+            self.player_passed_turn = True
+            self.dice_rolled = False
+            self.console.log(f"{self.current_player.get_color()} passed their turn")
+        else:
+            self.roll_phase()
+            self.player_passed_turn = True
+            self.dice_rolled = False
+            self.console.log(f"{self.current_player.get_color()} passed their turn")
 
-    def player_won_phase(self):
-        self.console.log(f"Player {self.current_player.get_color()} won the game!")
-        self.game_over = True
+    def has_player_won(self):
+        if self.current_player.victory_points >= 10:
+            self.console.log(f"Player {self.current_player.get_color()} won the game!")
+            self.game_over = True
+        else:
+            self.game_over = False
                
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
@@ -141,62 +112,6 @@ class GameManager:
             if tile.resource == 'desert':
                 continue
             vertex.house.player.add_resource(tile.resource, 1)
-    
-    def handle_click(self, mouse_pos):
-        print(f"Mouse clicked at: {mouse_pos}")
-        proximity_radius = self.game_board.hex_size / 4
-        
-        nearest_vertex = self.game_board.find_nearest_vertex(mouse_pos, proximity_radius)
-        nearest_edge = self.game_board.find_nearest_edge(mouse_pos, proximity_radius)
-        
-        if self.gamestate == 'settle_phase':
-            if self.starting_sub_phase == 'house' and nearest_vertex:
-                self.place_house(nearest_vertex)
-                self.console.log(f"{self.current_player.get_color()} placed a house")
-                self.starting_sub_phase = 'road'
-                self.remove_highlighted_locations()
-                self.starting_phase()
-            elif self.starting_sub_phase == 'road' and nearest_edge:
-                self.place_road(nearest_edge)
-                self.console.log(f"{self.current_player.get_color()} placed a road")
-                self.starting_sub_phase = 'house'
-                self.remove_highlighted_locations()
-                self.current_player_index += 1
-                
-                if self.current_player_index < len(self.starting_phase_players_stack):
-                    self.starting_phase()
-                    
-                if self.current_player_index >= len(self.starting_phase_players_stack):
-                    self.current_player_index = 0
-                    self.gamestate = 'normal_phase'
-                    self.last_placed_house_vertex = {}
-                    self.update()
-        
-        else:
-            if nearest_vertex and nearest_edge:
-                vertex_distance = np.hypot(mouse_pos[0] - nearest_vertex.position[0], 
-                                           mouse_pos[1] - nearest_vertex.position[1])
-                edge_distance = np.hypot(
-                    mouse_pos[0] - (nearest_edge.vertex1.position[0] + nearest_edge.vertex2.position[0]) // 2, 
-                    mouse_pos[1] - (nearest_edge.vertex1.position[1] + nearest_edge.vertex2.position[1]) // 2)
-                
-                if vertex_distance < edge_distance:
-                    if nearest_vertex.house:
-                        self.place_city(nearest_vertex)
-                    else:
-                        self.place_house(nearest_vertex)
-                else:
-                    self.place_road(nearest_edge)
-                    
-            elif nearest_vertex:
-                if nearest_vertex.house:
-                    self.place_city(nearest_vertex)
-                else:
-                    self.place_house(nearest_vertex)
-            elif nearest_edge:
-                self.place_road(nearest_edge)
-            else:
-                print("No vertex or edge found")
                 
     def handle_action(self, action_type, action_params):
         if action_type == 'place_house':
@@ -229,7 +144,7 @@ class GameManager:
             
             
             self.current_player.victory_points += 1
-            self.console.log(f"{self.current_player.get_color()} built a house +1VP")
+            self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
             self.current_player.settlements -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
@@ -277,7 +192,7 @@ class GameManager:
             #self.find_available_road_locations()
             #self.find_available_house__and_city_locations()
             
-            self.console.log(f"{self.current_player.get_color()} built a city +1VP")
+            self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
             print(f"Placed city at {vertex.position}")
         else:
             print(f"Invalid City placement:\n" +
