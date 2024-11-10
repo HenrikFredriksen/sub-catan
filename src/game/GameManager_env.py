@@ -245,6 +245,7 @@ class GameManager:
             
             if self.gamestate == 'settle_phase':
                 self.last_placed_house_vertex[self.current_player] = vertex
+                self.starting_sub_phase = 'road'
                 
                 # check if house is the second one placed, if so, give settlement bonus
                 self.settlement_count[self.current_player] += 1
@@ -308,6 +309,7 @@ class GameManager:
             
             if self.gamestate == 'settle_phase':
                 self.player_passed_turn = True
+                self.starting_sub_phase = 'house'
         else:
             print(f"Invalid Road placement:\n" +
                   f"Player has resources? {self.current_player.can_build_road()}\n" +

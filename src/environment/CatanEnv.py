@@ -280,13 +280,15 @@ class CatanEnv(AECEnv):
                 agent: self.game_manager.turn >= self.game_manager.max_turns for agent in self.agents
             }
         
-        if self.in_starting_phase:
+        if self.in_starting_phase and self.game_manager.starting_sub_phase == 'house':
             self.agent_selection = self._agent_selector.next()
             if self.agent_selection is None:
                 # Starting phase is over
                 self.in_starting_phase = False
                 self._agent_selector = agent_selector(self.agents)
                 self.agent_selection = self._agent_selector.next()
+        elif self.in_starting_phase and self.game_manager.starting_sub_phase == 'road':
+            self.agent_selection = agent
         else:
             if self.game_manager.is_turn_over():
                 self.game_manager.player_passed_turn = False
