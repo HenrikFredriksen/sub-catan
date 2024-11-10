@@ -5,7 +5,7 @@ def test_environment():
     env = CatanEnv()
     env.reset()
     
-    max_steps = 100
+    max_steps = 1000
     step_count = 0
     
     while True:
@@ -13,28 +13,23 @@ def test_environment():
         obs, rew, termination, truncation, info = env.last()
         done = termination or truncation
         print(f"Agent: {agent}")
-        print(f"Observation: {obs}")
         print(f"Reward: {rew}, Done: {done}")
         
         if done:
-            action = None
-            print("Agent done, skipping action")
+            action = env.pass_action_index
+            print("Agent done, passing turn")
         else:
             valid_actions = env.get_valid_actions(agent)
             print(f"Valid actions: {valid_actions}")
-            if valid_actions:
-                action = np.random.choice(valid_actions)
-                print(f"Taking action: {action}")
-            else:
-                action = 0 # skip turn
-                print("No valid actions, skipping action")
+            action = np.random.choice(valid_actions)
+            print(f"Taking action: {action}")
                 
         env.step(action)
         step_count += 1
         
-        all_terminated = all(env.terminations.values())
-        all_truncated = all(env.truncations.values())
-        if all_terminated or all_truncated or step_count >= max_steps:
+
+        
+        if all(env.terminations.values()) or step_count >= max_steps:
             print("All agents done or max steps reached")
             break
         
