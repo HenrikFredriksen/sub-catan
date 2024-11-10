@@ -12,6 +12,8 @@ class GameManager:
         self.players = players
         self.console = console
         self.current_player_index = 0
+        self.player_passed_turn = False
+        self.dice_rolled = False
         self.game_over = False
         self.highlighted_vertecies = []
         self.highlighted_edges = []
@@ -57,16 +59,30 @@ class GameManager:
         self.turn += 1
         
     def roll_phase(self):
-        roll = self.roll_dice()
-        if roll == 7:
-            #implement robber
-            self.console.log("Robber moves")
-            print("Robber moves")
-            
+        if not self.dice_rolled:
+            roll = self.roll_dice()
+            if roll == 7:
+                #implement robber
+                self.console.log("Robber moves")
+            else:
+                self.check_tile_resources(roll)
+                print(f"Resources collected for roll {roll}")
         else:
-            self.check_tile_resources(roll)
-            print(f"Resources collected for roll {roll}")
-         
+            self.console.log("Dice already rolled this turn")
+            
+    def is_turn_over(self):
+        if self.player_passed_turn:
+            return True
+        else:
+            return False
+        
+        
+    def pass_turn(self):
+        self.player_passed_turn = True
+        self.dice_rolled = False
+        self.console.log(f"{self.current_player.get_color()} passed their turn")
+        
+        
     def starting_phase(self):
         if self.starting_sub_phase == 'house':
             self.find_available_house__and_city_locations()
@@ -182,7 +198,27 @@ class GameManager:
                 self.place_road(nearest_edge)
             else:
                 print("No vertex or edge found")
+                
+    def handle_action(self, action_type, action_params):
+        if action_type == 'place_house':
+            self.place_house(action_params)
+        elif action_type == 'place_city':
+            self.place_city(action_params)
+        elif action_type == 'place_road':
+            self.place_road(action_params)
+        elif action_type == 'pass_turn':
+            self.pass_turn()
+        #implment trade with bank later maybe, not necessary for now
+        elif action_type == 'trade_with_bank':
+            self.trade_with_bank(action_params[0], action_params[1])
+        else:
+            print(f"Invalid action: {action_type}")
             
+    def end_turn(self):
+        #not implemented yet
+        #if self.gamestate == 'settle_phase':
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        
 
     def place_house(self, vertex):
         print(f"Nearest vertex: {vertex.position}")
@@ -202,8 +238,8 @@ class GameManager:
             self.current_player.resources['wheat'] -= 1
             
             # update the highlighted locations
-            self.find_available_road_locations()
-            self.find_available_house__and_city_locations()
+            #self.find_available_road_locations()
+            #self.find_available_house__and_city_locations()
             
             print(f"Placed house at {vertex.position}")
             
@@ -236,8 +272,8 @@ class GameManager:
             self.current_player.victory_points += 1
             
             # update the highlighted locations
-            self.find_available_road_locations()
-            self.find_available_house__and_city_locations()
+            #self.find_available_road_locations()
+            #self.find_available_house__and_city_locations()
             
             self.console.log(f"{self.current_player.get_color()} built a city +1VP")
             print(f"Placed city at {vertex.position}")
@@ -262,8 +298,8 @@ class GameManager:
             self.current_player.resources['brick'] -= 1
             
             # update the highlighted locations
-            self.find_available_road_locations()
-            self.find_available_house__and_city_locations()
+            #self.find_available_road_locations()
+            #self.find_available_house__and_city_locations()
             
             self.console.log(f"{self.current_player.get_color()} built a road")
             print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
