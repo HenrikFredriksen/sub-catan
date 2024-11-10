@@ -14,7 +14,9 @@ def test_environment():
         done = termination or truncation
         print(f"Step: {step_count} ------------------------------------------------")
         print(f"Agent: {agent}")
-        print(f"Observation: {obs['player_state']}")
+        print("Observation: \n " +
+              f"Player: {obs['player_state']} \n" +
+              f"Enemy: {obs['enemy_state']}")
         print(f"Reward: {rew}, Done: {done}")
         
         if done:

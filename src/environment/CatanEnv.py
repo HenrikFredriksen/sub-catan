@@ -273,6 +273,7 @@ class CatanEnv(AECEnv):
             reward = self.calculate_reward(agent)
             self.rewards[agent] = reward
 
+            self.game_manager.has_player_won()
             if self.game_manager.game_over:
                 self.terminations = {agent: True for agent in self.agents}
                 
@@ -284,6 +285,7 @@ class CatanEnv(AECEnv):
             self.agent_selection = self._agent_selector.next()
             if self.agent_selection is None:
                 # Starting phase is over
+                self.game_manager.gamestate = 'normal_phase'
                 self.in_starting_phase = False
                 self._agent_selector = agent_selector(self.agents)
                 self.agent_selection = self._agent_selector.next()
