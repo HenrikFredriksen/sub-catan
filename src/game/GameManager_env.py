@@ -47,7 +47,6 @@ class GameManager:
         else:
             return False
         
-        
     def pass_turn(self):
         if self.dice_rolled:
             self.player_passed_turn = True
@@ -112,6 +111,7 @@ class GameManager:
             if tile.resource == 'desert':
                 continue
             vertex.house.player.add_resource(tile.resource, 1)
+            self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource} from settlement bonus")
                 
     def handle_action(self, action_type, action_params):
         if action_type == 'place_house':

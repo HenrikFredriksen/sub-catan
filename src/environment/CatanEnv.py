@@ -3,7 +3,6 @@ from pettingzoo.utils import agent_selector, wrappers
 import gymnasium
 from gymnasium import spaces
 import numpy as np
-import pygame
 
 from game.GameBoard import GameBoard
 from game.GameManager_env import GameManager
@@ -48,35 +47,40 @@ class CatanEnv(AECEnv):
             Player(color=(255, 165, 0), settlements=5, roads=15, cities=4) # Orange player
         ]
         
-        if render_mode == "human":
-            pygame.init()
-            self.console_window = pygame.display.set_mode((300, 400))
-            pygame.display.set_caption("Catan Console")
-            font = pygame.font.SysFont(None, 18)
-            self.console = Console(x=0, y=0, width=300, height=400, font=font)
-        else:
-            self.console = PrintConsole()
+        self.console = PrintConsole()
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
         self.vertices_list = list(self.game_board.vertices.values())
         self.edges_list = list(self.game_board.edges.values())
         
-        self.action_spaces = {agent: spaces.Discrete(self.calculate_action_space_size()) for agent in self.agents}
+        self.action_spaces = {
+            agent: spaces.Discrete(self.calculate_action_space_size()) for agent in self.agents
+        }
         
         enemy_state_size = (len(self.agents) - 1) * 2 # Total resources and victory points for each enemy, two values per enemy
-        self.observation_spaces = {agent: spaces.Dict({
-            'board_state': spaces.Box(low=0, high=1, shape=(self.calculate_board_state_size(),), dtype=np.float32), 
-            'player_state': spaces.Box(low=0, high=1, shape=(self.calculate_player_state_size(),), dtype=np.float32),
-            'enemy_state': spaces.Box(low=0, high=1, shape=(enemy_state_size,), dtype=np.float32),
-            'action_mask': spaces.Box(low=0, high=1, shape=(self.action_spaces[agent].n,), dtype=np.float32)
-        }) for agent in self.agents}
         
+        obs_size = (
+            self.calculate_board_state_size() + # Board state
+            self.calculate_player_state_size() + # Resources, remaining pieces and victory points for the player
+            enemy_state_size + # Total resources and victory points for each enemy, two values per enemy
+            self.action_spaces[self.agents[0]].n # size of action mask
+        )
+        self.observation_spaces = {
+            agent: spaces.Box(low=0, high=1, shape=(obs_size,), dtype=np.float32) for agent in self.agents        
+        }
+                
         self.render_mode = render_mode
         
         self.game_manager.gamestate = 'settle_phase'
         
         self.pass_action_index = 0
         self.roll_dice_action_index = 1
+        
+    def observation_space(self, agent):
+        return self.observation_spaces[agent]
+    
+    def action_space(self, agent):
+        return self.action_spaces[agent]
         
     def calculate_action_space_size(self):
         num_vertices = len(self.vertices_list)
@@ -89,12 +93,13 @@ class CatanEnv(AECEnv):
         num_edges = len(self.game_board.edges)
         num_tiles = len(self.game_board.tiles)
         
-        return num_vertices * 2 + num_edges * 1 + num_tiles * 5
+        return num_vertices * 2 + num_edges * 1 + num_tiles * 6
     
     def calculate_player_state_size(self):
         num_resources = 5
         num_different_pieces = 3
-        return num_resources + num_different_pieces
+        victory_points = 1
+        return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
         self.agents = self.possible_agents[:]
@@ -126,23 +131,27 @@ class CatanEnv(AECEnv):
 
         
         self.last_victory_points = {agent: 0 for agent in self.agents}
-        
-        if return_info:
-            return self.observe(self.agent_selection), {}
-        else:
-            return self.observe(self.agent_selection)
-        
+         
     def observe(self, agent):
         board_state = self.get_board_state()
         player_state = self.get_player_state(agent)
-        enemy_state = self.get_enemy_state(agent)
+        enemy_state = self.get_enemy_state(agent).flatten()
+        action_mask = self.get_action_mask(agent)
         
-        observation = {
-            'board_state': board_state,
-            'player_state': player_state,
-            'enemy_state': enemy_state,
-            'action_mask': self.get_action_mask(agent)
-        }
+        observation = np.concatenate([board_state, player_state, enemy_state, action_mask])
+        #observation = {
+        #    'board_state': board_state,
+        #    'player_state': player_state,
+        #    'enemy_state': enemy_state,
+        #    'action_mask': self.get_action_mask(agent)
+        #}
+        # Debugging statements
+        print(f"Agent: {agent}")
+        print(f"Board state size: {board_state.size}")
+        print(f"Player state size: {player_state.size}")
+        print(f"Enemy state size: {enemy_state.size}")
+        print(f"Action mask size: {action_mask.size}")
+        print(f"Total observation size: {observation.size}, Expected: {self.observation_spaces[agent].shape[0]}")
         return observation
     
     def get_action_mask(self, agent):
@@ -162,6 +171,7 @@ class CatanEnv(AECEnv):
             else:
                 vertex_state = np.array([0, 0], dtype=np.float32)
             vertex_states.append(vertex_state)
+        # vertex_states should be number of vertices x 2
         vertex_states = np.array(vertex_states).flatten()
                 
         edge_states = []
@@ -171,6 +181,7 @@ class CatanEnv(AECEnv):
             else:
                 edge_state = np.array([0], dtype=np.float32)
             edge_states.append(edge_state)
+        # edge_states should be number of edges x 1
         edge_states = np.array(edge_states).flatten()
         
         tile_states = []
@@ -183,8 +194,10 @@ class CatanEnv(AECEnv):
             if resource_idx >= 0:
                 resource_one_hot[resource_idx] = 1
             tile_states.append(resource_one_hot)
+        # tile_states should be number of tiles x 6, 5 for resources and 1 for number
         tile_states = np.array(tile_states).flatten()
         
+        # board_state should be number of vertices x 2 + number of edges x 1 + number of tiles x 6
         board_state = np.concatenate([vertex_states, edge_states, tile_states])
         
         return board_state
@@ -209,7 +222,7 @@ class CatanEnv(AECEnv):
         ], dtype=np.float32)
         
         victory_points = np.array([player.victory_points / 10], dtype=np.float32)
-        
+        # player_state should be 5 resources + 3 remaining pieces + 1 victory point
         player_state = np.concatenate([resources, remaining_pieces, victory_points])
         return player_state
     
