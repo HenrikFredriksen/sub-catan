@@ -12,15 +12,20 @@ class GameManager:
         self.players = players
         self.console = console
         self.current_player_index = 0
+        
+        #FLAGS
+        self.has_placed_piece = False
         self.player_passed_turn = False
         self.dice_rolled = False
         self.game_over = False
-        self.highlighted_vertecies = []
-        self.highlighted_edges = []
         self.gamestate = 'settle_phase'
         self.starting_sub_phase = 'house'
+        
         self.starting_phase_players_stack = self.players + self.players[::-1]
         self.settlement_count = {player: 0 for player in self.players}
+        
+        self.highlighted_vertecies = []
+        self.highlighted_edges = []
         self.last_placed_house_vertex = {}
 
         
@@ -32,6 +37,7 @@ class GameManager:
     def roll_phase(self):
         if not self.dice_rolled:
             roll = self.roll_dice()
+            self.dice_rolled = True
             if roll == 7:
                 #implement robber
                 self.console.log("Robber moves")
@@ -48,19 +54,24 @@ class GameManager:
             return False
         
     def pass_turn(self):
-        if self.dice_rolled:
-            self.player_passed_turn = True
-            self.dice_rolled = False
-            self.console.log(f"{self.current_player.get_color()} passed their turn")
-        else:
+        if self.dice_rolled == False:
             self.roll_phase()
-            self.player_passed_turn = True
-            self.dice_rolled = False
-            self.console.log(f"{self.current_player.get_color()} passed their turn")
+            
+        if self.has_placed_piece:
+            self.has_placed_piece = False
+            
+        self.player_passed_turn = True
+        self.dice_rolled = False
+        self.console.log(f"{self.current_player.get_color()} passed their turn")
 
     def has_player_won(self):
         if self.current_player.victory_points >= 10:
             self.console.log(f"Player {self.current_player.get_color()} won the game!")
+            self.starting_sub_phase = 'house'
+            self.current_player_index = 0
+            self.dice_rolled = False
+            self.player_passed_turn = False
+            self.has_placed_piece = False
             self.game_over = True
         else:
             self.game_over = False
@@ -127,12 +138,6 @@ class GameManager:
             self.trade_with_bank(action_params[0], action_params[1])
         else:
             print(f"Invalid action: {action_type}")
-            
-    def end_turn(self):
-        #not implemented yet
-        #if self.gamestate == 'settle_phase':
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
-        
 
     def place_house(self, vertex):
         print(f"Place at vertex: {vertex.position}")
@@ -142,9 +147,8 @@ class GameManager:
             house = House(vertex=vertex, player=self.current_player)
             vertex.house = house
             
-            
             self.current_player.victory_points += 1
-            self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
+            self.console.log(f"{self.current_player.get_color()} built a settlement +1VP, in total {self.current_player.victory_points}VP")
             self.current_player.settlements -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
@@ -155,10 +159,11 @@ class GameManager:
             #self.find_available_road_locations()
             #self.find_available_house__and_city_locations()
             
-            print(f"Placed house at {vertex.position}")
+            print(f"Settlement built at {vertex.position}")
             
             if self.gamestate == 'settle_phase':
                 self.last_placed_house_vertex[self.current_player] = vertex
+                self.has_placed_piece = True
                 self.starting_sub_phase = 'road'
                 
                 # check if house is the second one placed, if so, give settlement bonus
@@ -193,14 +198,13 @@ class GameManager:
             #self.find_available_house__and_city_locations()
             
             self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
-            print(f"Placed city at {vertex.position}")
+            print(f"City built at {vertex.position}")
         else:
             print(f"Invalid City placement:\n" +
                   f"Player has resources? {self.current_player.can_build_city()}\n" +
                   f"City already placed? {vertex.city}")
             
     def place_road(self, edge):
-        print(f"Place at edge: {edge.vertex1.position} - {edge.vertex2.position}")
         if (self.current_player.can_build_road() 
             and self.game_rules.is_valid_road_placement(edge, 
                                                         self.current_player, 
@@ -218,10 +222,10 @@ class GameManager:
             #self.find_available_road_locations()
             #self.find_available_house__and_city_locations()
             
-            self.console.log(f"{self.current_player.get_color()} built a road")
-            print(f"Placed road at {edge.vertex1.position} - {edge.vertex2.position}")
+            self.console.log(f"Red placed road at {edge.vertex1.position} - {edge.vertex2.position}")
             
             if self.gamestate == 'settle_phase':
+                self.has_placed_piece = True
                 self.player_passed_turn = True
                 self.starting_sub_phase = 'house'
         else:
@@ -250,7 +254,6 @@ class GameManager:
                 elif (self.current_player.can_build_city() and 
                       self.game_rules.is_valid_city_placement(vertex, self.current_player)):
                     self.highlighted_vertecies.append(vertex)
-        print(f"Available house locations: {len(self.highlighted_vertecies)}")
         
     def find_available_road_locations(self):
         self.highlighted_edges = []
@@ -261,8 +264,7 @@ class GameManager:
                                                        self.gamestate, 
                                                        self.last_placed_house_vertex.get(self.current_player))):
                 self.highlighted_edges.append(edge)
-        print(f"Available road locations: {len(self.highlighted_edges)}")
-        
+                        
     def remove_highlighted_locations(self):
         self.highlighted_vertecies = []
         self.highlighted_edges = []
