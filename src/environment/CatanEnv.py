@@ -12,6 +12,8 @@ from assets.Console import Console
 from assets.PrintConsole import PrintConsole
 from environment.CustomAgentSelector import CustomAgentSelector
 
+from collections import OrderedDict
+
 def env(render_mode=None):
     internal_render_mode = render_mode if render_mode != "ansi" else "human"
     
@@ -129,9 +131,8 @@ class CatanEnv(AECEnv):
         
         self.agent_selection = self._agent_selector.next()
 
-        
         self.last_victory_points = {agent: 0 for agent in self.agents}
-         
+                 
     def observe(self, agent):
         board_state = self.get_board_state()
         player_state = self.get_player_state(agent)
@@ -139,20 +140,24 @@ class CatanEnv(AECEnv):
         action_mask = self.get_action_mask(agent)
         
         observation = np.concatenate([board_state, player_state, enemy_state, action_mask])
-        #observation = {
-        #    'board_state': board_state,
-        #    'player_state': player_state,
-        #    'enemy_state': enemy_state,
-        #    'action_mask': self.get_action_mask(agent)
-        #}
+        
+        # takes a dictionary of observations for each agent
+        observation_dict = OrderedDict({
+            agent: observation
+        })
+        
+        for other_agent in self.agents:
+            if other_agent != agent:
+                observation_dict[other_agent] = np.zeros_like(observation)
         # Debugging statements
         print(f"Agent: {agent}")
-        print(f"Board state size: {board_state.size}")
-        print(f"Player state size: {player_state.size}")
-        print(f"Enemy state size: {enemy_state.size}")
-        print(f"Action mask size: {action_mask.size}")
+        #print(f"Board state size: {board_state.size}")
+        #print(f"Player state size: {player_state.size}")
+        #print(f"Enemy state size: {enemy_state.size}")
+        #print(f"Action mask size: {action_mask.size}")
         print(f"Total observation size: {observation.size}, Expected: {self.observation_spaces[agent].shape[0]}")
-        return observation
+        
+        return observation_dict
     
     def get_action_mask(self, agent):
         valid_actions = self.get_valid_actions(agent)
@@ -240,6 +245,7 @@ class CatanEnv(AECEnv):
         return np.array(enemy_states, dtype=np.float32)
     
     def step(self, action):
+        print(f"gamestate: {self.game_manager.gamestate}")
         if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
             self._was_dead_step(action)
             return
@@ -251,13 +257,22 @@ class CatanEnv(AECEnv):
         
         self._cumulative_rewards[agent] = 0.0
         
-        action_type, action_param = self.decode_action(action)
+        #pick the action for the agent from the action dict
+        if isinstance(action, dict):
+            action = action.get(agent, None)
+            if action is None:
+                raise ValueError(f"No action passed for agent {agent}")
+            
         valid_actions = self.get_valid_actions(agent)
+        print(f"Available house/city locations: {len(self.game_manager.highlighted_vertecies)}")
+        print(f"Available road locations: {len(self.game_manager.highlighted_edges)}")
         
         if action not in valid_actions:
             self.rewards[agent] = -1.0
             self.terminations[agent] = True
         else:
+            action_type, action_param = self.decode_action(action)
+
             if action_type == 'pass':
                 self.game_manager.pass_turn()
                 self.rewards[agent] = -0.1
@@ -290,8 +305,13 @@ class CatanEnv(AECEnv):
             self.truncations = {
                 agent: self.game_manager.turn >= self.game_manager.max_turns for agent in self.agents
             }
+            
+        self._accumulate_rewards()
         
-        if self.in_starting_phase and self.game_manager.starting_sub_phase == 'house':
+        if (self.in_starting_phase and 
+            self.game_manager.starting_sub_phase == 'house' and
+            self.game_manager.has_placed_piece):
+            
             self.agent_selection = self._agent_selector.next()
             if self.agent_selection is None:
                 # Starting phase is over
@@ -299,7 +319,10 @@ class CatanEnv(AECEnv):
                 self.in_starting_phase = False
                 self._agent_selector = agent_selector(self.agents)
                 self.agent_selection = self._agent_selector.next()
-        elif self.in_starting_phase and self.game_manager.starting_sub_phase == 'road':
+                
+        elif (self.in_starting_phase and 
+              self.game_manager.starting_sub_phase == 'road'
+              and self.game_manager.has_placed_piece):
             self.agent_selection = agent
         else:
             if self.game_manager.is_turn_over():
@@ -307,32 +330,39 @@ class CatanEnv(AECEnv):
                 self.agent_selection = self._agent_selector.next()
             else:
                 self.agent_selection = agent
-                        
-        self._accumulate_rewards()
                     
         if self.render_mode == "human":
             self.render()
         
     
     def decode_action(self, action):
-        if action == self.pass_action_index:
+        print(f"Decoding action: {action}")
+        
+        if isinstance(action, dict):
+            agent_action = action.get(self.agent_selection, None)
+            if agent_action is None:
+                raise ValueError(f"No action passed for agent {self.agent_selection}")
+        else:
+            agent_action = action
+        
+        if agent_action == self.pass_action_index:
             return ('pass', None)
-        elif action == self.roll_dice_action_index:
+        elif agent_action == self.roll_dice_action_index:
             return ('roll_dice', None)
         else:
-            action -= 2 # pass and roll dice actions
             num_vertices = len(self.vertices_list)
             num_edges = len(self.edges_list)
-            if 0 <= action < num_vertices:
+            if 2 <= action < num_vertices:
                 # build settlement
-                return ('place_settlement', action)
+                vertex_idx = action - 2
+                return ('place_settlement', vertex_idx)
             elif num_vertices <= action < 2 * num_vertices:
                 # build city
-                vertex_idx = action - num_vertices
+                vertex_idx = action - num_vertices - 2
                 return ('place_city', vertex_idx)
             else:
                 # build road
-                edge_idx = action - 2 * num_vertices
+                edge_idx = action - 2 * num_vertices - 2
                 return ('place_road', edge_idx)
     
     def get_valid_actions(self, agent):
@@ -368,7 +398,7 @@ class CatanEnv(AECEnv):
         return valid_actions
     
     def get_normal_phase_actions(self, agent):
-        valid_actions = [self.pass_action_index] # pass action always valid
+        valid_actions = []
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         self.game_manager.current_player_index = player_idx
@@ -377,6 +407,7 @@ class CatanEnv(AECEnv):
             valid_actions.append(self.roll_dice_action_index)
             return valid_actions
         else:
+            valid_actions.append(self.pass_action_index) # if dice thrown, pass action is always valid
             self.game_manager.find_available_house__and_city_locations()
             self.game_manager.find_available_road_locations()
             
@@ -397,10 +428,6 @@ class CatanEnv(AECEnv):
                 valid_actions.append(action)
                 
             return valid_actions
-                    
-                    
-            
-            
     
     def calculate_reward(self, agent):
         player_idx = self.agent_name_mapping[agent]
