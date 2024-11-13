@@ -62,6 +62,7 @@ class GameManager:
             
         self.player_passed_turn = True
         self.dice_rolled = False
+        self.turn += 1
         self.console.log(f"{self.current_player.get_color()} passed their turn")
 
     def has_player_won(self):
@@ -73,6 +74,8 @@ class GameManager:
             self.player_passed_turn = False
             self.has_placed_piece = False
             self.game_over = True
+
+            
         else:
             self.game_over = False
                

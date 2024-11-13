@@ -31,16 +31,18 @@ class CatanEnv(AECEnv):
     
     def __init__(self, render_mode=None):
         super().__init__()
-        self.agents = ['player1', 'player2', 'player3', 'player4']
+        self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
         
         self.starting_phase_agents_order = self.agents + self.agents[::-1]
         self.in_starting_phase = True
+        self.phase_transition = False
         
         self._agent_selector = agent_selector(self.agents)
         
         self.game_board = GameBoard()
+        self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
             Player(color=(255, 0, 0), settlements=5, roads=15, cities=4), # Red player
@@ -64,11 +66,22 @@ class CatanEnv(AECEnv):
         obs_size = (
             self.calculate_board_state_size() + # Board state
             self.calculate_player_state_size() + # Resources, remaining pieces and victory points for the player
-            enemy_state_size + # Total resources and victory points for each enemy, two values per enemy
-            self.action_spaces[self.agents[0]].n # size of action mask
+            enemy_state_size # Total resources and victory points for each enemy, two values per enemy
+            #self.action_spaces[self.agents[0]].n # size of action mask
         )
         self.observation_spaces = {
-            agent: spaces.Box(low=0, high=1, shape=(obs_size,), dtype=np.float32) for agent in self.agents        
+            #agent: spaces.Box(low=0, high=1, shape=(obs_size,), dtype=np.float32) for agent in self.agents  
+            agent: spaces.Dict(
+                {
+                    "action_mask": spaces.Box(
+                        low=0, high=1, shape=(self.action_spaces[agent].n,), dtype=np.int8
+                    ),
+                    "observation": spaces.Box(
+                        low=0, high=1, shape=(obs_size,), dtype=np.float32
+                    ),
+                }
+            )   
+            for agent in self.agents   
         }
                 
         self.render_mode = render_mode
@@ -77,6 +90,7 @@ class CatanEnv(AECEnv):
         
         self.pass_action_index = 0
         self.roll_dice_action_index = 1
+        self.step_count = 0
         
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -104,11 +118,27 @@ class CatanEnv(AECEnv):
         return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
+        # reset counter and flags
+        self.step_count = 0
+        self.in_starting_phase = True
+        self.phase_transition = False
+
+        # reset agents and selector
         self.agents = self.possible_agents[:]
         self.starting_phase_agents_order = self.agents + self.agents[::-1]
-        self.in_starting_phase = True
         self._agent_selector = CustomAgentSelector(self.starting_phase_agents_order)
+        self.agent_selection = self.agents[0]
         
+        # reset game state dictionaries
+        self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0.0 for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
+        self.infos = {agent: {} for agent in self.agents}
+
+        self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
+
+        # reset game components
         self.game_board = GameBoard()
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
@@ -118,50 +148,51 @@ class CatanEnv(AECEnv):
             Player(color=(20, 220, 20), settlements=5, roads=15, cities=4), # Green player
             Player(color=(255, 165, 0), settlements=5, roads=15, cities=4) # Orange player
         ]
+
+        # reset game manager and generate new board
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
         self.vertices_list = list(self.game_board.vertices.values())
         self.edges_list = list(self.game_board.edges.values())
-        
-        self.rewards = {agent: 0 for agent in self.agents}
-        self._cumulative_rewards = {agent: 0.0 for agent in self.agents}
-        self.terminations = {agent: False for agent in self.agents}
-        self.truncations = {agent: False for agent in self.agents}
-        self.infos = {agent: {} for agent in self.agents}
-        
-        self.agent_selection = self._agent_selector.next()
+        #self._reset_game()
 
-        self.last_victory_points = {agent: 0 for agent in self.agents}
+        self.game_manager.gamestate = 'settle_phase'
+        self.game_manager.dice_rolled = False
+
+        if self.render_mode == "human":
+            self.render()
                  
+        obs = self.observe(self.agent_selection)
+        return obs
+    
     def observe(self, agent):
         board_state = self.get_board_state()
         player_state = self.get_player_state(agent)
         enemy_state = self.get_enemy_state(agent).flatten()
+
         action_mask = self.get_action_mask(agent)
+        observation = np.concatenate([board_state, player_state, enemy_state])
         
-        observation = np.concatenate([board_state, player_state, enemy_state, action_mask])
         
         # takes a dictionary of observations for each agent
-        observation_dict = OrderedDict({
-            agent: observation
-        })
-        
-        for other_agent in self.agents:
-            if other_agent != agent:
-                observation_dict[other_agent] = np.zeros_like(observation)
+        observation_dict = {
+            "action_mask": action_mask,
+            "observation": observation
+        }
         # Debugging statements
         print(f"Agent: {agent}")
         #print(f"Board state size: {board_state.size}")
         #print(f"Player state size: {player_state.size}")
         #print(f"Enemy state size: {enemy_state.size}")
         #print(f"Action mask size: {action_mask.size}")
-        print(f"Total observation size: {observation.size}, Expected: {self.observation_spaces[agent].shape[0]}")
+        print(f"Total observation size: {observation.size}, Expected: {self.observation_spaces[agent]['observation'].shape[0]}")
+        print(f"Total action mask size: {action_mask.size}, Expected: {self.observation_spaces[agent]['action_mask'].shape[0]}")
         
         return observation_dict
     
     def get_action_mask(self, agent):
         valid_actions = self.get_valid_actions(agent)
-        action_mask = np.zeros(self.calculate_action_space_size(), dtype=np.float32)
+        action_mask = np.zeros(self.calculate_action_space_size(), dtype=np.int8)
         action_mask[valid_actions] = 1.0
         return action_mask
     
@@ -245,7 +276,17 @@ class CatanEnv(AECEnv):
         return np.array(enemy_states, dtype=np.float32)
     
     def step(self, action):
-        print(f"gamestate: {self.game_manager.gamestate}")
+        print(f"gamestate: {self.game_manager.gamestate}, turn: {self.game_manager.turn}, step: {self.step_count}, action: {action}")   
+        self.step_count += 1
+
+        if self.phase_transition:
+            self.phase_transition = False
+            self.game_manager.gamestate = 'normal_phase'
+            self.in_starting_phase = False
+            self._agent_selector = agent_selector(self.agents)
+            self.agent_selection = self.agents[0]
+            return
+        
         if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
             self._was_dead_step(action)
             return
@@ -254,14 +295,13 @@ class CatanEnv(AECEnv):
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         self.game_manager.current_player_index = player_idx
-        
-        self._cumulative_rewards[agent] = 0.0
-        
+                
         #pick the action for the agent from the action dict
         if isinstance(action, dict):
             action = action.get(agent, None)
             if action is None:
                 raise ValueError(f"No action passed for agent {agent}")
+            
             
         valid_actions = self.get_valid_actions(agent)
         print(f"Available house/city locations: {len(self.game_manager.highlighted_vertecies)}")
@@ -270,6 +310,7 @@ class CatanEnv(AECEnv):
         if action not in valid_actions:
             self.rewards[agent] = -1.0
             self.terminations[agent] = True
+            self.console.log(f"Invalid action: {action}")
         else:
             action_type, action_param = self.decode_action(action)
 
@@ -278,22 +319,27 @@ class CatanEnv(AECEnv):
                 self.rewards[agent] = -0.1
             elif action_type == 'roll_dice':
                 self.game_manager.roll_phase()
+                if self.phase_transition:
+                    self.phase_transition = False
                 self.rewards[agent] = 0.0
                 # IDEA: reward for getting resources? penalty for not getting resources?
             elif action_type == 'place_settlement':
                 vertex_idx = action_param
                 vertex = self.vertices_list[vertex_idx]
                 self.game_manager.place_house(vertex)
+                self.rewards[agent] = 1.0
             
             elif action_type == 'place_city':
                 vertex_idx = action_param
                 vertex = self.vertices_list[vertex_idx]
                 self.game_manager.place_city(vertex)
+                self.rewards[agent] = 1.0
             
             elif action_type == 'place_road':
                 edge_idx = action_param
                 edge = self.edges_list[edge_idx]
                 self.game_manager.place_road(edge)
+                self.rewards[agent] = 0.5
 
             reward = self.calculate_reward(agent)
             self.rewards[agent] = reward
@@ -316,10 +362,12 @@ class CatanEnv(AECEnv):
             if self.agent_selection is None:
                 # Starting phase is over
                 self.game_manager.gamestate = 'normal_phase'
-                self.in_starting_phase = False
-                self._agent_selector = agent_selector(self.agents)
-                self.agent_selection = self._agent_selector.next()
-                
+                self.phase_transition = True
+                self.game_manager.dice_rolled = False
+                self.agent_selection = self.agents[0]
+                self.terminations = {agent: False for agent in self.agents}
+                return         
+                   
         elif (self.in_starting_phase and 
               self.game_manager.starting_sub_phase == 'road'
               and self.game_manager.has_placed_piece):
@@ -366,6 +414,8 @@ class CatanEnv(AECEnv):
                 return ('place_road', edge_idx)
     
     def get_valid_actions(self, agent):
+        if self.phase_transition:
+            return [self.roll_dice_action_index]
         if self.in_starting_phase:
             return self.get_settle_phase_actions(agent)
         else:
@@ -398,7 +448,7 @@ class CatanEnv(AECEnv):
         return valid_actions
     
     def get_normal_phase_actions(self, agent):
-        valid_actions = []
+        valid_actions = [self.pass_action_index]
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         self.game_manager.current_player_index = player_idx
@@ -407,7 +457,6 @@ class CatanEnv(AECEnv):
             valid_actions.append(self.roll_dice_action_index)
             return valid_actions
         else:
-            valid_actions.append(self.pass_action_index) # if dice thrown, pass action is always valid
             self.game_manager.find_available_house__and_city_locations()
             self.game_manager.find_available_road_locations()
             
@@ -432,9 +481,12 @@ class CatanEnv(AECEnv):
     def calculate_reward(self, agent):
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
-        current_vp = player.victory_points
-        reward = current_vp - self.last_victory_points[agent]
-        self.last_victory_points[agent] = current_vp
+        reward = 0.0
+        for player_i in self.players:
+            if player.victory_points > player_i.victory_points:
+                reward += 1.0
+            elif player.victory_points < player_i.victory_points:
+                reward -= 1.0
         return reward
     
     def render(self):

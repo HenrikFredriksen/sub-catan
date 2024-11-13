@@ -1,4 +1,4 @@
-from environment.CatanEnv import CatanEnv
+from environment.CatanEnv_torch_spec import CatanEnv
 import numpy as np
 
 def test_environment():
@@ -13,10 +13,10 @@ def test_environment():
         obs, rew, termination, truncation, info = env.last()
         done = termination or truncation
         print(f"Step: {step_count} ------------------------------------------------")
-        print(f"gamestate: {env.game_manager.gamestate}")
-        print(f"Agent: {agent}")
-        print(f"Observation: {obs}")
-        print(f"Reward: {rew}, Done: {done}")
+        #print(f"gamestate: {env.game_manager.gamestate}")
+        #print(f"Agent: {agent}")
+        #print(f"Observation: {obs}")
+        #print(f"Reward: {rew}, Done: {done}")
         
         if done:
             action = env.pass_action_index
