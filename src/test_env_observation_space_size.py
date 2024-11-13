@@ -1,4 +1,4 @@
-from environment.CatanEnv import CatanEnv
+from environment.CatanEnv_torch_spec import CatanEnv
 
 if __name__ == "__main__":
     env = CatanEnv()
