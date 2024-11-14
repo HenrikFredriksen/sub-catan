@@ -14,3 +14,6 @@ class CustomAgentSelector:
             return agent_selection
         else:
             return None
+        
+    def is_last(self):
+        return self.current_agent_index == len(self.agent_order)

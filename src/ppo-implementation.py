@@ -244,60 +244,76 @@ class MultiAgentPPO:
 
     def train(self, n_episodes):
         best_reward = float('-inf')
-        episode_rewards = deque(maxlen=100)
+        episode_rewards = []
         
         for episode in range(n_episodes):
             print(f"Starting episode {episode + 1}")
-            episode_reward = {agent: 0 for agent in self.env.possible_agents}
-            self.env.reset()
-            agent_id = self.env.agent_selection
-            print(f"Terminations: {self.env.terminations}")
+            obs = self.env.reset()
+            done = {agent: False for agent in self.env.agents}
+            episode_reward = {agent: 0 for agent in self.env.agents}
             
             step = 0
-            truncated = False
-
             
-            while not truncated and step <= self.max_steps:
+            while not all(done.values()):
                 agent_id = self.env.agent_selection
 
-                observation = self.env.observe(agent_id)
-                
-                # Choose action
-                action, prob, val = self.choose_action(agent_id, observation)
-                
-                if self.env.terminations[agent_id]:
-                    self.env.step(None)
-                    continue
-                # Take action in environment
-                self.env.step(action)
-                
-                # Get reward and next observation
-                reward = self.env.rewards[agent_id]
-                done = self.env.terminations[agent_id] or self.env.truncations[agent_id]
-                
-                # Store experience
-                self.memories[agent_id].store(
-                    observation["observation"],
-                    action,
-                    prob,
-                    val,
-                    reward,
-                    done,
-                    observation["action_mask"]
+                done[agent_id] = (
+                self.env.terminations.get(agent_id, False) or 
+                self.env.truncations.get(agent_id, False)
                 )
                 
-                episode_reward[agent_id] += reward
                 
-                # Check if it's time to learn
-                if len(self.memories[agent_id].states) >= self.memories[agent_id].batch_size:
-                    self.learn(agent_id)
+                # Skip agents that have been terminated
+                if done.get(agent_id, False) or agent_id not in self.env.agents:
+                    self.env.step(None)  # Pass None to step for terminated agents
+                    continue
+                
+                observation = self.env.observe(agent_id)
+
+                # Choose and take action
+                action_data = self.choose_action(agent_id, observation)
+                if action_data is None:
+                    # If no valid action, pass
+                    self.env.step(None)
+                    continue
+                else:
+                    action, prob, val = action_data
+
+                # Take action in environment
+                self.env.step(action)
+
+                # Update rewards and done status
+                reward = self.env.rewards.get(agent_id, 0)
+                print(f"Agent {agent_id} took action {action} and got reward {reward}")
+                done[agent_id] = self.env.terminations.get(agent_id, False) or self.env.truncations.get(agent_id, False)
+                episode_reward[agent_id] += reward
+
+                # Store experience
+                self.memories[agent_id].store(
+                    state=observation['observation'],
+                    action=action,
+                    prob=prob,
+                    val=val,
+                    reward=reward,
+                    done=done[agent_id],
+                    action_mask=observation['action_mask']
+                )
                 
                 step += 1
-                truncated = all(self.env.truncations.values())
-            
+
+            # After the episode ends, proceed to learning and reward calculation
+            self.calculate_rewards(episode_reward)
+            # Check if it's time to learn
+            for agent_id in self.env.possible_agents:
+                if len(self.memories[agent_id].states) > 0:
+                    self.learn(agent_id)
+                        
             # Calculate average reward for this episode
             avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
             episode_rewards.append(avg_episode_reward)
+            
+            for agent_id in self.env.possible_agents:
+                self.memories[agent_id].clear()
             
             # Print training progress
             if (episode + 1) % 10 == 0:
@@ -311,6 +327,33 @@ class MultiAgentPPO:
                         torch.save(self.agents[agent_id]["network"].state_dict(), f"best_model_agent_{agent_id}.pt")
                     
         return episode_rewards
+
+    def calculate_rewards(self, episode_reward):
+        victory_points = self.env.get_victory_points()
+
+        winner = None
+        max_points = 0
+        for agent_id, vp in victory_points.items():
+            if vp > max_points:
+                max_points = vp
+                winner = agent_id
+
+        for agent_id in self.env.possible_agents:
+            if agent_id == winner and self.env.game_manager.check_if_game_ended():
+                extra_reward = 20
+                episode_reward[agent_id] += extra_reward
+                print(f"Agent {agent_id} won the game with {max_points} victory points. Extra reward: {extra_reward}")
+
+            vp_reward = victory_points[agent_id]
+            episode_reward[agent_id] += vp_reward
+            print(f"Agent {agent_id} got {vp_reward} victory points this episode")
+
+            if self.env.terminations.get(agent_id, False):
+                penalty = -10
+                episode_reward[agent_id] += penalty
+                print(f"Agent {agent_id} terminated early. Penalty {penalty}")
+            else:
+                print(f"Agent {agent_id} finished the episode with reward {episode_reward[agent_id]}")
 
 def main():
     env = CatanEnv()
@@ -329,7 +372,7 @@ def main():
     )
     
     # Train the agent
-    n_episodes = 1000
+    n_episodes = 100
     rewards = ppo.train(n_episodes)
     
     # Plot training rewards if desired
