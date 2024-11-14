@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from torch.distributions import Categorical
 from collections import deque
@@ -95,6 +96,7 @@ class MultiAgentPPO:
     def __init__(
         self,
         env,
+        writer,
         hidden_dim=256,
         batch_size=32,
         learning_rate=0.0003,
@@ -107,6 +109,7 @@ class MultiAgentPPO:
         max_steps=10000 
     ):
         self.env = env
+        self.writer = writer
         self.gamma = gamma
         self.gae_lambda = gae_lambda
         self.clip_epsilon = clip_epsilon
@@ -157,7 +160,7 @@ class MultiAgentPPO:
         
         return action.item(), prob.item(), value.item()
     
-    def learn(self, agent_id):
+    def learn(self, agent_id, episode):
         memory = self.memories[agent_id]
         network = self.agents[agent_id]["network"]
         optimizer = self.agents[agent_id]["optimizer"]
@@ -172,6 +175,12 @@ class MultiAgentPPO:
             action_masks,
             batches
         ) = memory.get_batches()
+        
+        policy_losses = []
+        value_losses = []
+        total_losses = []
+        entropies = []
+                
         
         # Convert to tensors
         states = torch.FloatTensor(np.array(states))
@@ -235,10 +244,27 @@ class MultiAgentPPO:
                 # Total loss
                 loss = policy_loss + self.c1 * value_loss - self.c2 * entropy
                 
+                # Collect for logging
+                policy_losses.append(policy_loss.item())
+                value_losses.append(value_loss.item())
+                total_losses.append(loss.item())
+                entropies.append(entropy.item())
+                
                 # Optimize
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
+        avg_policy_loss = np.mean(policy_losses)
+        avg_value_loss = np.mean(value_losses)
+        avg_total_loss = np.mean(total_losses)
+        avg_entropy = np.mean(entropies)
+        
+        self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
+        self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
+        self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
+        self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
+                
                 
         memory.clear()
 
@@ -302,15 +328,21 @@ class MultiAgentPPO:
                 step += 1
 
             # After the episode ends, proceed to learning and reward calculation
-            self.calculate_rewards(episode_reward)
+            self.calculate_rewards(episode_reward, episode)
+            
+            #logging
+            total_episode_reward = sum(episode_reward.values())
+            avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
+            episode_rewards.append(avg_episode_reward)
+            
+            self.writer.add_scalar("Average Reward per episode", avg_episode_reward, episode)
+            
             # Check if it's time to learn
             for agent_id in self.env.possible_agents:
                 if len(self.memories[agent_id].states) > 0:
-                    self.learn(agent_id)
+                    self.learn(agent_id, episode)
                         
             # Calculate average reward for this episode
-            avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
-            episode_rewards.append(avg_episode_reward)
             
             for agent_id in self.env.possible_agents:
                 self.memories[agent_id].clear()
@@ -328,12 +360,13 @@ class MultiAgentPPO:
                     
         return episode_rewards
 
-    def calculate_rewards(self, episode_reward):
+    def calculate_rewards(self, episode_reward, episode):
         victory_points = self.env.get_victory_points()
 
         winner = None
         max_points = 0
         for agent_id, vp in victory_points.items():
+            self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
             if vp > max_points:
                 max_points = vp
                 winner = agent_id
@@ -358,9 +391,12 @@ class MultiAgentPPO:
 def main():
     env = CatanEnv()
     
+    writer = SummaryWriter(log_dir='runs/catan_training')
+    
     # Init PPO agent
     ppo = MultiAgentPPO(
         env=env,
+        writer=writer,
         hidden_dim=512,
         batch_size=32,
         learning_rate=0.0003,
@@ -372,8 +408,10 @@ def main():
     )
     
     # Train the agent
-    n_episodes = 100
+    n_episodes = 10
     rewards = ppo.train(n_episodes)
+    
+    writer.close()
     
     # Plot training rewards if desired
     print("Training completed!")
