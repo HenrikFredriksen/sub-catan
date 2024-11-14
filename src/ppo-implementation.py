@@ -17,6 +17,10 @@ class PPONetwork(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU()
         )
         
@@ -397,18 +401,18 @@ def main():
     ppo = MultiAgentPPO(
         env=env,
         writer=writer,
-        hidden_dim=512,
+        hidden_dim=1536,
         batch_size=32,
-        learning_rate=0.0003,
+        learning_rate=0.0002,
         gamma=0.99,
         gae_lambda=0.95,
-        clip_epsilon=0.2,
+        clip_epsilon=0.4,
         n_epochs=4,
         max_steps=10000
     )
     
     # Train the agent
-    n_episodes = 10
+    n_episodes = 10000
     rewards = ppo.train(n_episodes)
     
     writer.close()
