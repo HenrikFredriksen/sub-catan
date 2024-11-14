@@ -21,6 +21,7 @@ class GameManager:
         self.gamestate = 'settle_phase'
         self.starting_sub_phase = 'house'
         self.phase_transition = False
+        self.game_ended_by_victory_points = False
         
         self.starting_phase_players_stack = self.players + self.players[::-1]
         self.settlement_count = {player: 0 for player in self.players}
@@ -70,6 +71,7 @@ class GameManager:
     def check_if_game_ended(self):
         if self.current_player.victory_points >= 10:
             self.console.log(f"Player {self.current_player.get_color()} won the game!")
+            self.game_ended_by_victory_points = True
             self.game_over = True
             return True
         elif self.turn >= self.max_turns:
