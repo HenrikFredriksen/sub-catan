@@ -119,7 +119,7 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self._agent_selector = CustomAgentSelector(self.starting_agents)
+        self._agent_selector = CustomAgentSelector(self.agents)
         self.agent_selection = self.agents[0]
         
         # reset game state dictionaries
