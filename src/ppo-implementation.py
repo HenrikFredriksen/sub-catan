@@ -364,7 +364,7 @@ class MultiAgentPPO:
         victory_points = self.env.get_victory_points()
 
         winner = None
-        max_points = 0
+        max_points = 10
         for agent_id, vp in victory_points.items():
             self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
             if vp > max_points:
@@ -384,7 +384,7 @@ class MultiAgentPPO:
             if self.env.terminations.get(agent_id, False):
                 penalty = -10
                 episode_reward[agent_id] += penalty
-                print(f"Agent {agent_id} terminated early. Penalty {penalty}")
+                print(f"Agent {agent_id} terminated early. Penalty {penalty}, total reward: {episode_reward[agent_id]}")
             else:
                 print(f"Agent {agent_id} finished the episode with reward {episode_reward[agent_id]}")
 

@@ -436,7 +436,7 @@ class CatanEnv(AECEnv):
         if game_over:
             for ag in self.agents:
                 self.terminations[ag] = True
-                self.rewards[ag] += 20 if ag == agent else 0
+                self.rewards[ag] += 20 if self.game_manager.game_ended_by_victory_points else 0
             self.infos[agent]['reason'] = 'Victory'
             self.console.log(f"step_Game Over!")
             self.console.log(f"step_Terminating all agents: {self.terminations}")
