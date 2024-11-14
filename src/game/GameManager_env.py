@@ -20,6 +20,7 @@ class GameManager:
         self.game_over = False
         self.gamestate = 'settle_phase'
         self.starting_sub_phase = 'house'
+        self.phase_transition = False
         
         self.starting_phase_players_stack = self.players + self.players[::-1]
         self.settlement_count = {player: 0 for player in self.players}
@@ -27,6 +28,7 @@ class GameManager:
         self.highlighted_vertecies = []
         self.highlighted_edges = []
         self.last_placed_house_vertex = {}
+        self.last_placed_road_edge = {}
 
         
     @property
@@ -65,19 +67,18 @@ class GameManager:
         self.turn += 1
         self.console.log(f"{self.current_player.get_color()} passed their turn")
 
-    def has_player_won(self):
+    def check_if_game_ended(self):
         if self.current_player.victory_points >= 10:
             self.console.log(f"Player {self.current_player.get_color()} won the game!")
-            self.starting_sub_phase = 'house'
-            self.current_player_index = 0
-            self.dice_rolled = False
-            self.player_passed_turn = False
-            self.has_placed_piece = False
             self.game_over = True
-
-            
+            return True
+        elif self.turn >= self.max_turns:
+            self.console.log("Game over, max turns reached")
+            self.game_over = True
+            return True
         else:
             self.game_over = False
+            return False
                
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
@@ -128,22 +129,37 @@ class GameManager:
             self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource} from settlement bonus")
                 
     def handle_action(self, action_type, action_params):
+        print(f"Action: {action_type}, {action_params} sent from step")
         if action_type == 'place_house':
             self.place_house(action_params)
+            if self.last_placed_house_vertex[self.current_player] != action_params:
+                print(f"House was not placed at {action_params}")
+                return False
+            return True
         elif action_type == 'place_city':
             self.place_city(action_params)
+            if self.last_placed_house_vertex[self.current_player] != action_params:
+                print(f"City was not placed at {action_params}")
+                return False
+            return True
         elif action_type == 'place_road':
             self.place_road(action_params)
+            if self.last_placed_road_edge[self.current_player] != action_params:
+                print(f"Road was not placed at {action_params}")
+                return False
+            return True
         elif action_type == 'pass_turn':
             self.pass_turn()
+            return True
         #implment trade with bank later maybe, not necessary for now
         elif action_type == 'trade_with_bank':
             self.trade_with_bank(action_params[0], action_params[1])
         else:
             print(f"Invalid action: {action_type}")
+            return False
 
     def place_house(self, vertex):
-        print(f"Place at vertex: {vertex.position}")
+        self.last_placed_house_vertex[self.current_player] = None
         if (self.current_player.can_build_settlement() and 
             self.game_rules.is_valid_house_placement(vertex, self.current_player, self.gamestate)):
             
@@ -162,10 +178,10 @@ class GameManager:
             #self.find_available_road_locations()
             #self.find_available_house__and_city_locations()
             
+            self.last_placed_house_vertex[self.current_player] = vertex
             print(f"Settlement built at {vertex.position}")
             
             if self.gamestate == 'settle_phase':
-                self.last_placed_house_vertex[self.current_player] = vertex
                 self.has_placed_piece = True
                 self.starting_sub_phase = 'road'
                 
@@ -182,7 +198,7 @@ class GameManager:
                   f"House already placed? {vertex.house}")
 
     def place_city(self, vertex):
-        print(f"Place at vertex: {vertex.position}")
+        self.last_placed_house_vertex[self.current_player] = None
         if (self.current_player.can_build_city() 
             and self.game_rules.is_valid_city_placement(vertex, self.current_player)
             ):
@@ -196,9 +212,7 @@ class GameManager:
             self.current_player.resources['ore'] -= 3
             self.current_player.victory_points += 1
             
-            # update the highlighted locations
-            #self.find_available_road_locations()
-            #self.find_available_house__and_city_locations()
+            self.last_placed_house_vertex[self.current_player] = vertex
             
             self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
             print(f"City built at {vertex.position}")
@@ -208,6 +222,7 @@ class GameManager:
                   f"City already placed? {vertex.city}")
             
     def place_road(self, edge):
+        self.last_placed_road_edge[self.current_player] = None
         if (self.current_player.can_build_road() 
             and self.game_rules.is_valid_road_placement(edge, 
                                                         self.current_player, 
@@ -221,9 +236,7 @@ class GameManager:
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
             
-            # update the highlighted locations
-            #self.find_available_road_locations()
-            #self.find_available_house__and_city_locations()
+            self.last_placed_road_edge[self.current_player] = edge
             
             self.console.log(f"Red placed road at {edge.vertex1.position} - {edge.vertex2.position}")
             
