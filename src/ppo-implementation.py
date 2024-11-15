@@ -290,7 +290,7 @@ class MultiAgentPPO:
             print(f"Starting episode {episode + 1}")
             
             episode_seed = seed + episode if seed is not None else None
-            obs = self.env.reset()
+            obs = self.env.reset(seed=episode_seed, return_info=True)[0]
             done = {agent: False for agent in self.env.agents}
             episode_reward = {agent: 0 for agent in self.env.agents}
             
