@@ -102,8 +102,8 @@ class CatanEnv(AECEnv):
         num_vertices = len(self.game_board.vertices)
         num_edges = len(self.game_board.edges)
         num_tiles = len(self.game_board.tiles)
-        
-        return num_vertices * 2 + num_edges * 1 + num_tiles * 6
+        # 2 for house and city, 1 for road, 6 for resources and 1 for number
+        return num_vertices * 2 + num_edges * 1 + num_tiles * 6 + num_tiles * 1
     
     def calculate_player_state_size(self):
         num_resources = 5
@@ -216,19 +216,19 @@ class CatanEnv(AECEnv):
         edge_states = np.array(edge_states).flatten()
         
         tile_states = []
-        resource_to_idx = {'wood': 0, 'brick': 1, 'sheep': 2, 'wheat': 3, 'ore': 4}
+        resource_to_idx = {'wood': 0, 'brick': 1, 'sheep': 2, 'wheat': 3, 'ore': 4, 'desert': 5}
         for tile in self.game_board.tiles.values():
-            resource_one_hot = np.zeros(6, dtype=np.float32)
+            resource_one_hot = np.zeros(7, dtype=np.float32)
             tile_number = tile.number / 12
-            resource_one_hot[5] = tile_number
+            resource_one_hot[6] = tile_number
             resource_idx = resource_to_idx.get(tile.resource, -1)
             if resource_idx >= 0:
                 resource_one_hot[resource_idx] = 1
             tile_states.append(resource_one_hot)
-        # tile_states should be number of tiles x 6, 5 for resources and 1 for number
+        # tile_states should be number of tiles x 7, 6 for resources and 1 for number
         tile_states = np.array(tile_states).flatten()
         
-        # board_state should be number of vertices x 2 + number of edges x 1 + number of tiles x 6
+        # board_state should be number of vertices x 2 + number of edges x 1 + number of tiles x 7
         board_state = np.concatenate([vertex_states, edge_states, tile_states])
         
         return board_state
@@ -436,17 +436,26 @@ class CatanEnv(AECEnv):
             return valid_actions
     
     def calculate_reward(self, agent, action_type):
+        reward = 0
         if action_type == 'roll_dice':
             return 1.0
         if self.was_placement_successful:
             if action_type == 'place_house':
-                return 5
+                vertex = self.game_manager.last_placed_house_vertex.get(self.agent_selection)
+                if vertex:
+                    adj_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
+                    reward += len(adj_tiles) * 2
+
+                    resources = self.game_board.get_resources_adj_to_vertex(vertex)
+                    unique_resources = set(resources.keys()) - {'desert'}
+                    reward += len(unique_resources) * 3
+                return reward
             elif action_type == 'place_city':
                 return 6
             elif action_type == 'place_road':
                 return 2
             elif action_type == 'pass_turn':
-                return 0
+                return -1.0
         else:
             return -1.0
     

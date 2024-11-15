@@ -96,6 +96,12 @@ class GameBoard:
         for tile in self.get_tiles_adj_to_vertex(vertex):
             resources[tile.resource] = resources.get(tile.resource, 0) + 1
         return resources
+    
+    def get_numbers_adj_to_vertex(self, vertex):
+        numbers = {}
+        for tile in self.get_tiles_adj_to_vertex(vertex):
+            numbers[tile.number] = numbers.get(tile.number, 0) + 1
+        return numbers
         
     # Only for debugging
     #def draw_grid(self, screen):
