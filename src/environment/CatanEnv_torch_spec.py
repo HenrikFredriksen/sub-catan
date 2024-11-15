@@ -3,6 +3,7 @@ from pettingzoo.utils import agent_selector, wrappers
 import gymnasium
 from gymnasium import spaces
 import numpy as np
+import random
 
 from game.GameBoard import GameBoard
 from game.GameManager_env import GameManager
@@ -112,6 +113,11 @@ class CatanEnv(AECEnv):
         return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
+        
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+            
         # reset counter and flags
         self.step_count = 0
         
@@ -127,7 +133,7 @@ class CatanEnv(AECEnv):
         self._cumulative_rewards = {agent: 0.0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
-        self.infos = {agent: {} for agent in self.agents}
+        self.infos = {agent: {'seed': seed} for agent in self.agents}
         
         self.console.log(f"Starting new game with agents: {self.agents}")
         self.console.log(f"Terminations: {self.terminations}")
@@ -159,6 +165,9 @@ class CatanEnv(AECEnv):
             self.render()
                  
         obs = self.observe(self.agent_selection)
+        
+        if return_info:
+            return obs, self.infos[self.agent_selection]
         return obs
     
     def observe(self, agent):

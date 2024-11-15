@@ -280,12 +280,16 @@ class MultiAgentPPO:
             print(f"Error in learning step for agent {agent_id}: {e}")
             memory.clear()
 
-    def train(self, n_episodes):
+    def train(self, n_episodes, seed=None):
+        if seed is not None:
+            torch.manual_seed(seed)
         best_reward = float('-inf')
         episode_rewards = []
         
         for episode in range(n_episodes):
             print(f"Starting episode {episode + 1}")
+            
+            episode_seed = seed + episode if seed is not None else None
             obs = self.env.reset()
             done = {agent: False for agent in self.env.agents}
             episode_reward = {agent: 0 for agent in self.env.agents}
@@ -424,7 +428,8 @@ def pretrain_settlement_phase():
     )
 
     n_episodes = 1000
-    rewards = ppo.train(n_episodes)
+    base_seed = 42
+    rewards = ppo.train(n_episodes, seed=base_seed)
 
     for agent_id in ppo.agents:
         torch.save(
@@ -464,7 +469,8 @@ def main():
 
     # Train the agent
     n_episodes = 10000
-    rewards = ppo.train(n_episodes)
+    base_seed = 42
+    rewards = ppo.train(n_episodes, seed=base_seed)
     
     writer.close()
     
