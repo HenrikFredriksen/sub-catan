@@ -17,6 +17,21 @@ class CatanSettlePhaseEnv(CatanEnv):
                 resources = self.game_board.get_resources_adj_to_vertex(vertex)
                 unique_resources = set(resources.keys()) - {'desert'}
                 reward += len(unique_resources) * 3
+                
+                numbers = self.game_board.get_numbers_adj_to_vertex(vertex)
+                for number in numbers.values():
+                    if number == 6 or number == 8:
+                        reward += 5 * 1.5
+                    elif number == 5 or number == 9:
+                        reward += 4 * 1.25
+                    elif number == 4 or number == 10:
+                        reward += 3
+                    elif number == 3 or number == 11:
+                        reward += 2
+                    elif number == 2 or number == 12:
+                        reward += 1
+                    else:
+                        raise ValueError(f"Invalid number {number} adjacent to vertex {vertex.position}")
 
                 player = self.players[self.agent_name_mapping[agent]]
                 settlement_count = 5 - player.settlements
