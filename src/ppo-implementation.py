@@ -428,7 +428,7 @@ def pretrain_settlement_phase():
         max_steps=10000
     )
 
-    n_episodes = 1000
+    n_episodes = 100
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed)
 
@@ -469,7 +469,7 @@ def main():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 10000
+    n_episodes = 100
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed)
     
