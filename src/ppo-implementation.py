@@ -6,8 +6,10 @@ import numpy as np
 from torch.distributions import Categorical
 from collections import deque
 import time
+import os
 
 from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv
 
 class PPONetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -382,7 +384,7 @@ class MultiAgentPPO:
                 print(f"Agent {agent_id} won the game with {max_points} victory points. Extra reward: {extra_reward}")
 
             vp_reward = victory_points[agent_id]
-            episode_reward[agent_id] += vp_reward
+            episode_reward[agent_id] += vp_reward * 2
             print(f"Agent {agent_id} got {vp_reward} victory points this episode")
 
             if self.env.terminations.get(agent_id, False):
@@ -391,6 +393,35 @@ class MultiAgentPPO:
                 print(f"Agent {agent_id} terminated early. Penalty {penalty}, total reward: {episode_reward[agent_id]}")
             else:
                 print(f"Agent {agent_id} finished the episode with reward {episode_reward[agent_id]}")
+
+def pretrain_settlement_phase():
+    env = CatanSettlePhaseEnv()
+    writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
+
+    ppo = MultiAgentPPO(
+        env=env,
+        writer=writer,
+        hidden_dim=1536,
+        batch_size=32,
+        learning_rate=0.0003,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_epsilon=0.4,
+        n_epochs=4,
+        max_steps=10000
+    )
+
+    n_episodes = 100
+    rewards = ppo.train(n_episodes)
+
+    for agent_id in ppo.agents:
+        torch.save(
+            ppo.agents[agent_id]["network"].state_dict(), 
+            f"pretrained_settle_{agent_id}.pt"
+        )
+
+    writer.close()
+    return ppo
 
 def main():
     env = CatanEnv()
@@ -410,7 +441,15 @@ def main():
         n_epochs=4,
         max_steps=10000
     )
-    
+
+    for agent_id in ppo.agents:
+        pretrained_path = f"pretrained_settle_{agent_id}.pt"
+        if os.path.exists(pretrained_path):
+            ppo.agents[agent_id]["network"].load_state_dict(
+                torch.load(pretrained_path)
+            )
+            print(f"Loaded pretrained model for agent {agent_id}")
+
     # Train the agent
     n_episodes = 10000
     rewards = ppo.train(n_episodes)
@@ -420,6 +459,10 @@ def main():
     # Plot training rewards if desired
     print("Training completed!")
     print(f"Final average reward: {sum(rewards) / len(rewards):.2f}")
+    return ppo
 
 if __name__ == "__main__":
+
+    pretrain_settlement_phase()
+
     main()

@@ -90,6 +90,12 @@ class GameBoard:
             if vertex in self.get_tile_vertices(tile):
                 adjacent_tiles.append(tile)
         return adjacent_tiles
+    
+    def get_resources_adj_to_vertex(self, vertex):
+        resources = {}
+        for tile in self.get_tiles_adj_to_vertex(vertex):
+            resources[tile.resource] = resources.get(tile.resource, 0) + 1
+        return resources
         
     # Only for debugging
     #def draw_grid(self, screen):
