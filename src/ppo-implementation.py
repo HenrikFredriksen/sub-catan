@@ -39,16 +39,18 @@ class PPONetwork(nn.Module):
         shared_features = self.shared_layers(x)
         
         # Apply action mask to policy logits
-        policy = self.policy_head(shared_features)
-        masked_policy = policy * action_mask
-        masked_sum = masked_policy.sum(dim=-1, keepdim=True)
+        shared_features = torch.nn.functional.normalize(shared_features, dim=-1)
 
-        masked_sum = torch.where(masked_sum == 0, torch.ones_like(masked_sum), masked_sum)
+        policy_logits = self.policy_head[0](shared_features)
+        masked_logits = policy_logits.masked_fill(action_mask == 0, float('-inf'))
+        
+        policy = torch.nn.functional.softmax(masked_logits, dim=-1)
 
-        policy = masked_policy / masked_sum
+        # Ensure policy is valid
+        policy = torch.clamp(policy, 1e-7, 1)
+        policy = policy / policy.sum(dim=-1, keepdim=True)
         
         value = self.value_head(shared_features)
-        
         return policy, value
 
 class PPOMemory:
@@ -144,135 +146,248 @@ class MultiAgentPPO:
             self.memories[agent_id] = PPOMemory(batch_size)
     
     def choose_action(self, agent_id, observation):
+        if self.env.terminations.get(agent_id, False):
+            return None, None, None
+         
         state = torch.FloatTensor(self.env.observe(agent_id)["observation"])
         action_mask = torch.FloatTensor(self.env.observe(agent_id)["action_mask"])
         
         with torch.no_grad():
-            if torch.sum(action_mask) == 0:
-                print(f"Warning: No valid actions available agent {agent_id}")
-                return 0, float('-inf'), 0.0
-            policy, value = self.agents[agent_id]["network"](state, action_mask)
+            try:
+                policy, value = self.agents[agent_id]["network"](state, action_mask)
 
 
-            if torch.isnan(policy).any():
-                print(f"Warning: NaN in policy for agent {agent_id}")
-                # Return a dummy action
-                return 0, float('-inf'), value.item()
+                if torch.isnan(policy).any():
+                    print(f"Warning: NaN in policy for agent {agent_id}")
+                    # Return a dummy action
+                    valid_actions = torch.nonzero(action_mask).flatten()
+                    if len(valid_actions) == 0:
+                        return None, None, None
+                    action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
+                    return action.item(), 0.0, 0.0
             
-            # Create distribution only for valid actions
-            dist = Categorical(policy)
-            action = dist.sample()
-            prob = dist.log_prob(action)
-        
-        return action.item(), prob.item(), value.item()
+                # Create distribution only for valid actions
+                dist = Categorical(policy)
+                action = dist.sample()
+                prob = dist.log_prob(action)
+
+                if action_mask[action] == 0:
+                    # Fallback safe
+                    valid_actions = torch.nonzero(action_mask).flatten()
+                    action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
+                    prob = torch.log(torch.tensor(1.0 / len(valid_actions)))
+       
+                return action.item(), prob.item(), value.item()
+            
+            except Exception as e:
+                print(f"Error choosing action for agent: {agent_id}: {str(e)}")
+                valid_actions = torch.nonzero(action_mask).flatten()   
+                if len(valid_actions) == 0:
+                    return None, None, None
+                action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
+                return action.item(), 0.0, 0.0
     
     def learn(self, agent_id, episode):
-        memory = self.memories[agent_id]
-        network = self.agents[agent_id]["network"]
-        optimizer = self.agents[agent_id]["optimizer"]
-        
-        (
-            states,
-            actions,
-            old_probs,
-            vals,
-            rewards,
-            dones,
-            action_masks,
-            batches
-        ) = memory.get_batches()
-        
+
         policy_losses = []
         value_losses = []
         total_losses = []
         entropies = []
-                
-        
-        # Convert to tensors
-        states = torch.FloatTensor(np.array(states))
-        actions = torch.LongTensor(np.array(actions))
-        old_probs = torch.FloatTensor(np.array(old_probs))
-        vals = torch.FloatTensor(np.array(vals))
-        rewards = torch.FloatTensor(np.array(rewards))
-        dones = torch.FloatTensor(np.array(dones))
-        action_masks = torch.FloatTensor(np.array(action_masks))
-        
-        # Calculate advantages
-        advantages = torch.zeros_like(rewards)
-        last_gae_lam = 0
-        
-        for t in reversed(range(len(rewards))):
-            if t == len(rewards) - 1:
-                next_val = 0
-            else:
-                next_val = vals[t + 1]
-            
-            delta = rewards[t] + self.gamma * next_val * (1 - dones[t]) - vals[t]
-            advantages[t] = last_gae_lam = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * last_gae_lam
-            
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
-        for _ in range(self.n_epochs):
-            for batch in batches:
-                # Get batch data
-                batch_states = states[batch]
-                batch_actions = actions[batch]
-                batch_old_probs = old_probs[batch]
-                batch_advantages = advantages[batch]
-                batch_action_masks = action_masks[batch]
-                
-                # Forward pass
-                policy, value = network(batch_states, batch_action_masks)
-                
-                policy = policy + 1e-10
-                policy = policy / policy.sum(dim=-1, keepdim=True)
 
-                try:
-                    # Calculate policy loss
-                    dist = Categorical(policy)
-                    new_probs = dist.log_prob(batch_actions)
-                    entropy = dist.entropy().mean()
-                except:
-                    print(f"Invalid policy distribution: {policy.sum(dim=-1)}")
-                    continue
-                
-                ratio = torch.exp(new_probs - batch_old_probs)
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon) * batch_advantages
-                
-                policy_loss = -torch.min(surr1, surr2).mean()
-                
-                # Calculate value loss
-                value_target = batch_advantages + vals[batch]
-                value_loss = ((value.squeeze() - value_target) ** 2).mean()
-                
-                # Total loss
+        try:
+            memory = self.memories[agent_id]
+            if len(memory.states) < self.batch_size:
+                return
+
+            network = self.agents[agent_id]["network"]
+            optimizer = self.agents[agent_id]["optimizer"]
+
+            states = torch.FloatTensor(np.array(memory.states))
+            actions = torch.LongTensor(np.array(memory.actions))
+            old_probs = torch.FloatTensor(np.array(memory.probs))
+            rewards = torch.FloatTensor(np.array(memory.rewards))
+            action_masks = torch.FloatTensor(np.array(memory.action_masks))
+
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+
+            for epoch in range(self.n_epochs):
+                policy, value = network(states, action_masks)
+
+                if torch.isnan(policy).any() or torch.isnan(value).any():
+                    print(f"NaN detected in forward pass for agent {agent_id}")
+                    break
+
+                dist = Categorical(policy)
+                new_probs = dist.log_prob(actions)
+                entropy = dist.entropy().mean()
+
+                ratio = (new_probs - old_probs).exp()
+                ratio = torch.clamp(ratio, -10, 10)  # Prevent extreme ratios
+
+                advantages = rewards - value.detach()
+                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+                surrogate1 = ratio * advantages
+                surrogate2 = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon) * advantages
+
+                policy_loss = -torch.min(surrogate1, surrogate2).mean()
+                value_loss = 0.5 * ((rewards - value) ** 2).mean()
+
                 loss = policy_loss + self.c1 * value_loss - self.c2 * entropy
-                
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
                 # Collect for logging
                 policy_losses.append(policy_loss.item())
                 value_losses.append(value_loss.item())
                 total_losses.append(loss.item())
                 entropies.append(entropy.item())
-                
-                # Optimize
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                
-        avg_policy_loss = np.mean(policy_losses)
-        avg_value_loss = np.mean(value_losses)
-        avg_total_loss = np.mean(total_losses)
-        avg_entropy = np.mean(entropies)
-        
-        self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
-        self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
-        self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
-        self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
-                
-                
-        memory.clear()
+
+                # Monitor loss values
+                if torch.isnan(loss):
+                    print(f"NaN loss detected for agent {agent_id}")
+                    break
+
+            memory.clear()
+
+            avg_policy_loss = np.mean(policy_losses)
+            avg_value_loss = np.mean(value_losses)
+            avg_total_loss = np.mean(total_losses)
+            avg_entropy = np.mean(entropies)
+            
+            self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
+            self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
+            self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
+            self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
+
+        except Exception as e:
+            print(f"Error in learning step for agent {agent_id}: {e}")
+            memory.clear()
+
+    #def learn(self, agent_id, episode):
+    #    memory = self.memories[agent_id]
+    #    network = self.agents[agent_id]["network"]
+    ##    optimizer = self.agents[agent_id]["optimizer"]
+    ##    
+    #    (
+    #        states,
+    #        actions,
+    #        old_probs,
+    #        vals,
+    #        rewards,
+    #        dones,
+    #        action_masks,
+    #        batches
+    #    ) = memory.get_batches()
+    #    
+    #    policy_losses = []
+    #    value_losses = []
+    #    total_losses = []
+    #    entropies = []
+    #            
+    #    
+    #    # Convert to tensors
+    #    states = torch.FloatTensor(np.array(states))
+    #    actions = torch.LongTensor(np.array(actions))
+    #    old_probs = torch.FloatTensor(np.array(old_probs))
+    #    vals = torch.FloatTensor(np.array(vals))
+    #    rewards = torch.FloatTensor(np.array(rewards))
+    #    dones = torch.FloatTensor(np.array(dones))
+    #    action_masks = torch.FloatTensor(np.array(action_masks))
+    #    
+    #    # Calculate advantages
+    #    advantages = torch.zeros_like(rewards)
+    #    last_gae_lam = 0
+    #    
+    #    for t in reversed(range(len(rewards))):
+    #        if t == len(rewards) - 1:
+    #            next_val = 0
+    #        else:
+    #            next_val = vals[t + 1]
+    #        
+    #        delta = rewards[t] + self.gamma * next_val * (1 - dones[t]) - vals[t]
+    #        advantages[t] = last_gae_lam = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * last_gae_lam
+    #        
+    #    # Normalize advantages
+    #    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+    #    
+    #    for _ in range(self.n_epochs):
+    #        for batch in batches:
+    #            batch_states = states[batch]
+    #            batch_actions = actions[batch]
+    #            batch_old_probs = old_probs[batch]
+    #            batch_advantages = advantages[batch]
+    #            batch_action_masks = action_masks[batch]
+    #            
+    #            try:
+    #                policy, value = network(batch_states, batch_action_masks)
+#
+    #                if torch.isnan(policy).any():
+    #                    print(f"Warning: NaN in policy for agent {agent_id}")
+    #                    continue
+    #                
+    #                policy = policy + 1e-10
+    #                policy = policy / policy.sum(dim=-1, keepdim=True)
+#
+    #                # Verify policy validity!
+    #                if not torch.allclose(policy.sum(dim=-1), torch.ones(policy.shape[0])):
+    #                    print(f"Warning: Invalid policy sum for agent {agent_id}")
+    #                    continue
+#
+    #                # Calculate policy loss
+    #                dist = Categorical(policy)
+    #                new_probs = dist.log_prob(batch_actions)
+    #                entropy = dist.entropy().mean()
+#
+    #                ratio = torch.exp(new_probs - batch_old_probs)
+    #                # prevent explosions
+    #                ratio = torch.clamp(ratio, -20, 20)
+#
+    #                surr1 = ratio * batch_advantages
+    #                surr2 = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon) * batch_advantages
+    #            
+    #                policy_loss = -torch.min(surr1, surr2).mean()
+    #                value_loss = ((value.squeeze() - (batch_advantages + vals[batch])) ** 2).mean()
+#
+    #                loss = policy_loss + self.c1 * value_loss - self.c2 * entropy
+#
+    #                if torch.isnan(loss) or torch.isinf(loss):
+    #                    print(f"Warning: Loss value exploded for agent {agent_id}")
+    #                    continue
+#
+    #                optimizer.zero_grad()
+    #                loss.backward()
+#
+    #                # Clip gradients
+    #                torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=0.5)
+#
+    #                optimizer.step()
+#
+    #                # Collect for logging
+    #                policy_losses.append(policy_loss.item())
+    #                value_losses.append(value_loss.item())
+    #                total_losses.append(loss.item())
+    #                entropies.append(entropy.item())
+#
+    #            except Exception as e:
+    #                print(f"Error learning step for agent: {agent_id}: {str(e)}")
+    #                continue
+    #            
+    #    avg_policy_loss = np.mean(policy_losses)
+    #    avg_value_loss = np.mean(value_losses)
+    #    avg_total_loss = np.mean(total_losses)
+    #    avg_entropy = np.mean(entropies)
+    #    
+    #    self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
+    #    self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
+    #    self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
+    #    self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
+    #            
+    #            
+    #    memory.clear()
 
     def train(self, n_episodes):
         best_reward = float('-inf')
@@ -293,7 +408,6 @@ class MultiAgentPPO:
                 self.env.terminations.get(agent_id, False) or 
                 self.env.truncations.get(agent_id, False)
                 )
-                
                 
                 # Skip agents that have been terminated
                 if done.get(agent_id, False) or agent_id not in self.env.agents:
@@ -354,7 +468,7 @@ class MultiAgentPPO:
                 self.memories[agent_id].clear()
             
             # Print training progress
-            if (episode + 1) % 10 == 0:
+            if (episode + 1) % 1 == 0:
                 avg_reward = sum(episode_rewards) / len(episode_rewards)
                 print(f"Episode {episode + 1}, Average Reward: {avg_reward:.2f}")
                 
@@ -400,7 +514,7 @@ class MultiAgentPPO:
                 print(f"Agent {agent_id} got termination reward of {termination_penalty}")
             
             print(f"{agent_id} final reward: {episode_reward[agent_id]}")
-            
+
 def pretrain_settlement_phase():
     env = CatanSettlePhaseEnv()
     writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
