@@ -446,7 +446,7 @@ class CatanEnv(AECEnv):
             elif action_type == 'place_road':
                 return 2
             elif action_type == 'pass_turn':
-                return -1.0
+                return 0
         else:
             return -1.0
     

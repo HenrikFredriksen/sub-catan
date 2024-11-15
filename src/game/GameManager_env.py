@@ -153,6 +153,9 @@ class GameManager:
         elif action_type == 'pass_turn':
             self.pass_turn()
             return True
+        elif action_type == 'roll_dice':
+            self.roll_phase()
+            return True
         #implment trade with bank later maybe, not necessary for now
         elif action_type == 'trade_with_bank':
             self.trade_with_bank(action_params[0], action_params[1])
