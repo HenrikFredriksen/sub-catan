@@ -276,132 +276,6 @@ class CatanEnv(AECEnv):
             agent_id = 'player_' + str(self.players.index(player) + 1)
             victory_points[agent_id] = player.victory_points
         return victory_points
-      
-    #def step(self, action):
-    #    print(f"gamestate: {self.game_manager.gamestate}, turn: {self.game_manager.turn}, step: {self.step_count}, action: {action}")   
-    #    self.step_count += 1
-    #    
-    #    agent = self.agent_selection
-    #    player_idx = self.agent_name_mapping[agent]
-    #    player = self.players[player_idx]
-    #    self.game_manager.current_player_index = player_idx
-#
-    #    if self.game_manager.check_if_game_ended():
-    #        self.terminations[agent] = True
-    #        self.rewards[agent] = self.calculate_reward(agent)
-    #        self.infos[agent]['reason'] = 'Victory'
-    #        print(f"step_Agent: {agent} has won the game!")
-    #        
-    #    elif self.game_manager.game_over:
-    #        self.truncations[agent] = True
-    #        self.rewards[agent] = self.calculate_reward(agent)
-    #        self.infos[agent]['reason'] = 'Game Over'
-    #        print(f"step_Game Over!")
-    #        
-    #    else:
-    #        pass
-    #    
-    #    
-    #    if self.phase_transition:
-    #        self.phase_transition = False
-    #        self.game_manager.gamestate = 'normal_phase'
-    #        self.in_starting_phase = False
-    #        self._agent_selector = agent_selector(self.agents)
-    #        self.agent_selection = self.agents[0]
-    #        return
-    #    
-    #    if (self.terminations[self.agent_selection] or self.truncations[self.agent_selection]):
-    #        self._was_dead_step(action)
-    #        return
-    #    
-    #            
-    #    #pick the action for the agent from the action dict
-    #    if isinstance(action, dict):
-    #        action = action.get(agent, None)
-    #        if action is None:
-    #            raise ValueError(f"No action passed for agent {agent}")
-    #        
-    #        
-    #    valid_actions = self.get_valid_actions(agent)
-    #    print(f"Available house/city locations: {len(self.game_manager.highlighted_vertecies)}")
-    #    print(f"Available road locations: {len(self.game_manager.highlighted_edges)}")
-    #    
-    #    if action not in valid_actions:
-    #        self.rewards[agent] = -1.0
-    #        self.terminations[agent] = True
-    #        self.console.log(f"Invalid action: {action}")
-    #    else:
-    #        action_type, action_param = self.decode_action(action)
-#
-    #        if action_type == 'pass':
-    #            self.game_manager.pass_turn()
-    #            self.rewards[agent] = -0.1
-    #        elif action_type == 'roll_dice':
-    #            self.game_manager.roll_phase()
-    #            if self.phase_transition:
-    #                self.phase_transition = False
-    #            self.rewards[agent] = 0.0
-    #            # IDEA: reward for getting resources? penalty for not getting resources?
-    #        elif action_type == 'place_settlement':
-    #            vertex_idx = action_param
-    #            vertex = self.vertices_list[vertex_idx]
-    #            self.game_manager.place_house(vertex)
-    #            self.rewards[agent] = 1.0
-    #        
-    #        elif action_type == 'place_city':
-    #            vertex_idx = action_param
-    #            vertex = self.vertices_list[vertex_idx]
-    #            self.game_manager.place_city(vertex)
-    #            self.rewards[agent] = 1.0
-    #        
-    #        elif action_type == 'place_road':
-    #            edge_idx = action_param
-    #            edge = self.edges_list[edge_idx]
-    #            self.game_manager.place_road(edge)
-    #            self.rewards[agent] = 0.5
-#
-    #        reward = self.calculate_reward(agent)
-    #        self.rewards[agent] = reward
-#
-    #        self.game_manager.check_if_game_ended()
-    #        if self.game_manager.game_over:
-    #            self.game_manager.game_over = False
-    #            self.terminations = {agent: True for agent in self.agents}
-    #            self.truncations = {agent: False for agent in self.agents}
-    #            
-    #        self.truncations = {
-    #            agent: self.game_manager.turn >= self.game_manager.max_turns for agent in self.agents
-    #        }
-    #        
-    #    self._accumulate_rewards()
-    #    
-    #    if (self.in_starting_phase and 
-    #        self.game_manager.starting_sub_phase == 'house' and
-    #        self.game_manager.has_placed_piece):
-    #        
-    #        self.agent_selection = self._agent_selector.next()
-    #        if self.agent_selection is None:
-    #            # Starting phase is over
-    #            self.game_manager.gamestate = 'normal_phase'
-    #            self.phase_transition = True
-    #            self.game_manager.dice_rolled = False
-    #            self.agent_selection = self.agents[0]
-    #            self.terminations = {agent: False for agent in self.agents}
-    #            return         
-    #               
-    #    elif (self.in_starting_phase and 
-    #          self.game_manager.starting_sub_phase == 'road'
-    #          and self.game_manager.has_placed_piece):
-    #        self.agent_selection = agent
-    #    else:
-    #        if self.game_manager.is_turn_over():
-    #            self.game_manager.player_passed_turn = False
-    #            self.agent_selection = self._agent_selector.next()
-    #        else:
-    #            self.agent_selection = agent
-    #                
-    #    if self.render_mode == "human":
-    #        self.render()
         
     def step(self, action):
         self.step_count += 1
@@ -418,6 +292,7 @@ class CatanEnv(AECEnv):
             return
         
         valid_actions = self.get_valid_actions(agent)
+        self.console.log(f"step_Valid actions: {valid_actions}")
         if action not in valid_actions:
             # Action is invalid, agent terminated
             self.rewards[agent] = -2.0
@@ -561,6 +436,8 @@ class CatanEnv(AECEnv):
             return valid_actions
     
     def calculate_reward(self, agent, action_type):
+        if action_type == 'roll_dice':
+            return 1.0
         if self.was_placement_successful:
             if action_type == 'place_house':
                 return 5
@@ -569,7 +446,7 @@ class CatanEnv(AECEnv):
             elif action_type == 'place_road':
                 return 2
             elif action_type == 'pass_turn':
-                return -0.1
+                return -1.0
         else:
             return -1.0
     
