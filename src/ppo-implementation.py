@@ -118,6 +118,7 @@ class MultiAgentPPO:
     ):
         self.env = env
         self.writer = writer
+        self.batch_size = batch_size
         self.gamma = gamma
         self.gae_lambda = gae_lambda
         self.clip_epsilon = clip_epsilon
