@@ -71,8 +71,12 @@ class CatanSettlePhaseEnv(CatanEnv):
         self.game_manager.has_placed_piece = False
         self.game_manager.dice_rolled = False
 
-    def reset(self):
+    def reset(self, seed=None, return_info=False, options=None):
         obs = super().reset()
         self.terminations = {agent: False for agent in self.possible_agents}
         self.truncations = {agent: False for agent in self.possible_agents}
+        self.infos = {agent: {} for agent in self.possible_agents}
+        
+        if return_info:
+            return obs, self.infos[self.agent_selection]
         return obs
