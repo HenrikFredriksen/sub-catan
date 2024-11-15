@@ -369,31 +369,38 @@ class MultiAgentPPO:
     def calculate_rewards(self, episode_reward, episode):
         victory_points = self.env.get_victory_points()
 
-        winner = None
-        max_points = 10
-        for agent_id, vp in victory_points.items():
-            self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
-            if vp > max_points:
-                max_points = vp
-                winner = agent_id
+        rankings = sorted(victory_points.items(), key=lambda x: x[1], reverse=True)
 
-        for agent_id in self.env.possible_agents:
-            if agent_id == winner and self.env.game_manager.check_if_game_ended():
+        position_scalars = {
+            0: 1.5,
+            1: 1.0,
+            2: 0.5,
+            3: 0.1
+        }
+
+        for position, (agent_id, vp) in enumerate(rankings):
+            self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
+
+            scalar = position_scalars[position]
+            episode_reward[agent_id] *= scalar
+
+            if position == 0 and self.env.game_manager.game_ended_by_victory_points:
                 extra_reward = 20
                 episode_reward[agent_id] += extra_reward
-                print(f"Agent {agent_id} won the game with {max_points} victory points. Extra reward: {extra_reward}")
+                print(f"Agent {agent_id} got extra reward of {extra_reward} for winning the game")
+            
+            print(f"{agent_id} placed {position + 1} with {vp} victory points and got reward {episode_reward[agent_id]}")
 
-            vp_reward = victory_points[agent_id]
-            episode_reward[agent_id] += vp_reward * 2
-            print(f"Agent {agent_id} got {vp_reward} victory points this episode")
+            vp_reward = vp * 2
+            episode_reward[agent_id] += vp_reward
 
             if self.env.terminations.get(agent_id, False):
-                penalty = -10
-                episode_reward[agent_id] += penalty
-                print(f"Agent {agent_id} terminated early. Penalty {penalty}, total reward: {episode_reward[agent_id]}")
-            else:
-                print(f"Agent {agent_id} finished the episode with reward {episode_reward[agent_id]}")
-
+                termination_penalty = -10
+                episode_reward[agent_id] += termination_penalty
+                print(f"Agent {agent_id} got termination reward of {termination_penalty}")
+            
+            print(f"{agent_id} final reward: {episode_reward[agent_id]}")
+            
 def pretrain_settlement_phase():
     env = CatanSettlePhaseEnv()
     writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
@@ -451,7 +458,7 @@ def main():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 10000
+    n_episodes = 1000
     rewards = ppo.train(n_episodes)
     
     writer.close()
@@ -462,7 +469,4 @@ def main():
     return ppo
 
 if __name__ == "__main__":
-
-    pretrain_settlement_phase()
-
     main()
