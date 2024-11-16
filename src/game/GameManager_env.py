@@ -42,13 +42,37 @@ class GameManager:
             roll = self.roll_dice()
             self.dice_rolled = True
             if roll == 7:
-                #implement robber
+                self.robber()
                 self.console.log("Robber moves")
             else:
                 self.check_tile_resources(roll)
                 print(f"Resources collected for roll {roll}")
         else:
             self.console.log("Dice already rolled this turn")
+            
+    def robber(self):
+        for player in self.players:
+            total_resources = sum(player.resources.values())
+            if total_resources > 7:
+                resources = player.resources
+                half = total_resources // 2
+                # sort resources by amount
+                sorted_resources = sorted(resources.items(), key=lambda x: x[1])
+                
+                for resource in player.resources:
+                    player.resources[resource] = 0
+                    
+                resource_kept = 0
+                for resource, amount in reversed(sorted_resources):
+                    if resource_kept + amount <= half:
+                        player.resources[resource] = amount
+                        resource_kept += amount
+                    else:
+                        player.resources[resource] = half - resource_kept
+                        break
+                self.console.log(f"{player.get_color()} lost half of their resources")
+            else:
+                self.console.log(f"{player.get_color()} has {total_resources}, not robbed")
             
     def is_turn_over(self):
         if self.player_passed_turn:
