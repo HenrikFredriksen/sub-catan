@@ -336,7 +336,7 @@ class MultiAgentPPO:
             print(f"Error in learning step for agent {agent_id}: {e}")
             memory.clear()
 
-    def train(self, n_episodes, seed=None):
+    def train(self, n_episodes, seed=None, max_turns_without_building=100):
         if seed is not None:
             torch.manual_seed(seed)
         best_reward = float('-inf')
@@ -351,9 +351,25 @@ class MultiAgentPPO:
             episode_reward = {agent: 0 for agent in self.env.agents}
             
             step = 0
+            turns_without_building = 0
+            last_building_count = sum(p.settlements + p.cities for p in self.env.players)
             
             while not all(done.values()):
                 agent_id = self.env.agent_selection
+                
+                current_building_count = sum(p.settlements + p.cities for p in self.env.players)
+                if current_building_count > last_building_count:
+                    turns_without_building = 0
+                    last_building_count = current_building_count
+                else:
+                    turns_without_building += 1
+                    
+                if turns_without_building > max_turns_without_building:
+                    print("Ending episode due to no building for too long")
+                    for ag in self.env.agents:
+                        episode_reward[ag] = -10
+                        done[ag] = True
+                    break
 
                 done[agent_id] = (
                 self.env.terminations.get(agent_id, False) or 
@@ -541,9 +557,9 @@ def main():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 1500
+    n_episodes = 10000
     base_seed = 42
-    rewards = ppo.train(n_episodes, seed=base_seed)
+    rewards = ppo.train(n_episodes, seed=base_seed, max_turns_without_building=1000)
     
     writer.close()
     
@@ -602,6 +618,6 @@ def eval_trained_agents():
 
 if __name__ == "__main__":
     #pretrain_settlement_phase()
-    #main()
-    eval_trained_agents()
+    main()
+    #eval_trained_agents()
     
