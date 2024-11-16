@@ -1,9 +1,11 @@
 from environment.CatanEnv_torch_spec import CatanEnv
 
 class CatanSettlePhaseEnv(CatanEnv):
-    def __init__(self):
+    def __init__(self, writer=None):
         super().__init__()
         self.max_settlements = len(self.possible_agents) * 2
+        self.full_resource_settles = {agent: 0 for agent in self.possible_agents}
+        self.writer = writer
 
     def calculate_reward(self, agent, action_type):
         reward = 0
@@ -48,6 +50,20 @@ class CatanSettlePhaseEnv(CatanEnv):
                             total_resources.discard('desert')
 
                             if len(total_resources) == 5:
+                                self.number_of_full_res_settles += 1
+                                if self.writer:
+                                    self.writer.add_scalar(
+                                        f'Full Resource Settles/{agent}',
+                                        self.number_of_full_res_settles[agent],
+                                        self._episode_steps
+                                    )
+                                    
+                                    total_full_res = sum(self.number_of_full_res_settles.values())
+                                    self.writer.add_scalar(
+                                        'Full Resource Settles/Total',
+                                        total_full_res,
+                                        self._episode_steps
+                                    )
                                 self.console.log(f"Player {self.players[self.agent_name_mapping[agent]]} has placed settlements on all 5 resources")
                                 reward += 20
                             break
@@ -73,6 +89,7 @@ class CatanSettlePhaseEnv(CatanEnv):
 
     def reset(self, seed=None, return_info=False, options=None):
         obs = super().reset()
+        self.number_of_full_res_settles = {agent: 0 for agent in self.possible_agents}
         self.terminations = {agent: False for agent in self.possible_agents}
         self.truncations = {agent: False for agent in self.possible_agents}
         self.infos = {agent: {} for agent in self.possible_agents}
