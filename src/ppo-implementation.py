@@ -52,6 +52,47 @@ class PPONetwork(nn.Module):
         
         value = self.value_head(shared_features)
         return policy, value
+    
+class ExlporativeNetwork(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.shared_layers = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        self.policy_head = nn.Sequential(nn.Linear(hidden_dim, output_dim), nn.Softmax(dim=-1))
+        self.value_head = nn.Sequential(nn.Linear(hidden_dim, 1))
+        
+    def forward(self, x, action_mask):
+        shared_features = self.shared_layers(x)
+        
+        # Apply action mask to policy logits
+        shared_features = torch.nn.functional.normalize(shared_features, dim=-1)
+
+        policy_logits = self.policy_head[0](shared_features)
+        masked_logits = policy_logits.masked_fill(action_mask == 0, float('-inf'))
+        
+        policy = torch.nn.functional.softmax(masked_logits, dim=-1)
+
+        # Ensure policy is valid
+        policy = torch.clamp(policy, 1e-7, 1)
+        policy = policy / policy.sum(dim=-1, keepdim=True)
+        
+        value = self.value_head(shared_features)
+        return policy, value
+    
+def get_policy_network(policy_type, input_dim, hidden_dim, output_dim):
+    policies = {
+        'baseline': PPONetwork,
+        'explorative': ExlporativeNetwork
+    }
+    return policies[policy_type](input_dim, hidden_dim, output_dim)
 
 class PPOMemory:
     def __init__(self, batch_size):
@@ -105,46 +146,49 @@ class MultiAgentPPO:
         self,
         env,
         writer,
-        hidden_dim=256,
-        batch_size=32,
-        learning_rate=0.0003,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_epsilon=0.2,
-        c1=1.0,  # Value function coefficient
-        c2=0.01,  # Entropy coefficient
-        n_epochs=4,
-        max_steps=10000 
+        agent_policies=None,
+        **kwargs
     ):
         self.env = env
         self.writer = writer
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.gae_lambda = gae_lambda
-        self.clip_epsilon = clip_epsilon
-        self.c1 = c1
-        self.c2 = c2
-        self.n_epochs = n_epochs
-        self.max_steps = max_steps
+        self.batch_size = kwargs.get('batch_size', 32)
+        self.learning_rate = kwargs.get('learning_rate', 0.0003)
+        self.gamma = kwargs.get('gamma', 0.99)
+        self.gae_lambda = kwargs.get('gae_lambda', 0.95)
+        self.clip_epsilon = kwargs.get('clip_epsilon', 0.2)
+        self.n_epochs = kwargs.get('n_epochs', 4)
+        self.c1 = kwargs.get('c1', 0.5)
+        self.c2 = kwargs.get('c2', 0.01)
+        self.max_steps = kwargs.get('max_steps', 10000)
         
         # Init networks and optimizers for each agent
         self.agents = {}
         self.memories = {}
+        
+        agent_policies = agent_policies or {agent_id: 'baseline' for agent_id in env.possible_agents}
         
         for agent_id in self.env.possible_agents:
             obs_dim = env.observation_spaces[agent_id]["observation"].shape[0]
             act_dim = env.action_spaces[agent_id].n
             
             # Create network and optimizer
-            network = PPONetwork(obs_dim, hidden_dim, act_dim)
-            optimizer = optim.Adam(network.parameters(), lr=learning_rate)
+            
+            
+            network = get_policy_network(
+                agent_policies[agent_id],
+                obs_dim,
+                kwargs.get('hidden_dim', 256),
+                act_dim
+            )
+            optimizer = optim.Adam(network.parameters(), lr=kwargs.get('learning_rate', 0.0003))
             
             self.agents[agent_id] = {
                 "network": network,
-                "optimizer": optimizer
+                "optimizer": optimizer,
+                "policy_type": agent_policies[agent_id]
             }
             # Create memory
-            self.memories[agent_id] = PPOMemory(batch_size)
+            self.memories[agent_id] = PPOMemory(kwargs.get('batch_size', 32))
     
     def choose_action(self, agent_id, observation):
         if self.env.terminations.get(agent_id, False):
@@ -244,6 +288,17 @@ class MultiAgentPPO:
 
                 surrogate1 = ratio * advantages
                 surrogate2 = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon) * advantages
+                
+                policy_type = self.agents[agent_id]["policy_type"]
+                
+                entropy_coef = self.c2
+                if policy_type == 'explorative':
+                    entropy_coef = self.c2 * 2
+                    
+                    state_values = self.agents[agent_id]["network"].value_head(states)
+                    state_std = state_values.std()
+                    exploration_bonus = state_std * 0.1
+                    advantages = advantages + exploration_bonus
 
                 policy_loss = -torch.min(surrogate1, surrogate2).mean()
                 value_loss = 0.5 * ((rewards - value) ** 2).mean()
@@ -412,15 +467,24 @@ class MultiAgentPPO:
             print(f"{agent_id} final reward: {episode_reward[agent_id]}")
 
 def pretrain_settlement_phase():
-    env = CatanSettlePhaseEnv()
     writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
+    env = CatanSettlePhaseEnv(writer=writer)
+    writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
+    
+    agent_policies = {
+        'player_1': 'baseline',
+        'player_2': 'explorative',
+        'player_3': 'baseline',
+        'player_4': 'explorative'
+    }
 
     ppo = MultiAgentPPO(
         env=env,
         writer=writer,
+        agent_policies=agent_policies,
         hidden_dim=1536,
         batch_size=32,
-        learning_rate=0.0003,
+        learning_rate=0.0002,
         gamma=0.99,
         gae_lambda=0.95,
         clip_epsilon=0.4,
@@ -428,7 +492,7 @@ def pretrain_settlement_phase():
         max_steps=10000
     )
 
-    n_episodes = 100
+    n_episodes = 1500
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed)
 
@@ -446,10 +510,18 @@ def main():
     
     writer = SummaryWriter(log_dir='runs/catan_training')
     
+    agent_policies = {
+        'player_1': 'baseline',
+        'player_2': 'explorative',
+        'player_3': 'baseline',
+        'player_4': 'explorative'
+    }
+    
     # Init PPO agent
     ppo = MultiAgentPPO(
         env=env,
         writer=writer,
+        agent_policies=agent_policies,
         hidden_dim=1536,
         batch_size=32,
         learning_rate=0.0002,
@@ -469,7 +541,7 @@ def main():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 100
+    n_episodes = 1500
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed)
     
@@ -480,7 +552,56 @@ def main():
     print(f"Final average reward: {sum(rewards) / len(rewards):.2f}")
     return ppo
 
+def eval_trained_agents():
+    env = CatanEnv(render_mode='human')
+    env.reset()
+    
+    ppo = MultiAgentPPO(
+        env=env,
+        writer=None,
+        hidden_dim=1536,
+        batch_size=32,
+        learning_rate=0.0002,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_epsilon=0.4,
+        n_epochs=4,
+        max_steps=10000
+    )
+    
+    for agent_id in ppo.agents:
+        pretrained_path = f"best_model_agent_{agent_id}.pt"
+        if os.path.exists(pretrained_path):
+            ppo.agents[agent_id]["network"].load_state_dict(
+                torch.load(pretrained_path)
+            )
+            print(f"Loaded model for agent {agent_id}")
+    
+    done = False
+    while not done:
+        
+        if all(env.terminations.values()):
+            done = True
+            env.close()
+            print("All agents have been terminated")
+            break
+        
+        try:
+            observation, reward, termination, truncation, info = env.last()
+            if termination or truncation:
+                action = None
+            else:
+                action = ppo.choose_action(env.agent_selection, observation)[0]
+            env.step(action)
+            if env.render_mode == 'human':
+                env.render()
+                
+        except Exception as e:
+            print(f"Error in evaluation loop: {e}")
+            break
+
 if __name__ == "__main__":
-    pretrain_settlement_phase()
-    main()
+    #pretrain_settlement_phase()
+    #main()
+    eval_trained_agents()
     

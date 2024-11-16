@@ -2,14 +2,17 @@ from pettingzoo.utils.env import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
 import gymnasium
 from gymnasium import spaces
+import pygame
 import numpy as np
 import random
+import os
 
 from game.GameBoard import GameBoard
 from game.GameManager_env import GameManager
 from game.GameRules import GameRules
 from game.Player import Player
 from assets.PrintConsole import PrintConsole
+from assets.Console import Console
 from environment.CustomAgentSelector import CustomAgentSelector
 
 def env(render_mode=None):
@@ -29,13 +32,33 @@ class CatanEnv(AECEnv):
     
     def __init__(self, render_mode=None):
         super().__init__()
+        self.render_mode = render_mode
+        if self.render_mode == "human":
+            pygame.init()
+            self.screen_width = 1400
+            self.screen_height = 700
+            self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+            pygame.display.set_caption("Sub-Catan")
+            self.clock = pygame.time.Clock()
+            self.hex_size = 80
+            self.number_size = 45
+            self.load_resources()
+            
+            self.font_console = pygame.font.SysFont(None, 18)
+            
+            self.is_open = True
+        else:
+            self.tile_images = None
+            self.number_images = None
+            self.is_open = False
+            
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))        
         self._agent_selector = agent_selector(self.agents)
         
-        self.game_board = GameBoard()
+        self.game_board = GameBoard(self.tile_images, self.number_images)            
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
@@ -45,7 +68,10 @@ class CatanEnv(AECEnv):
             Player(color=(255, 165, 0), settlements=5, roads=15, cities=4) # Orange player
         ]
         
-        self.console = PrintConsole()
+        if render_mode == "human":
+            self.console = Console(x=self.screen_width - 400, y=10, width=390, height=200, font=self.font_console)
+        else:
+            self.console = PrintConsole()
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
         self.vertices_list = list(self.game_board.vertices.values())
@@ -78,8 +104,6 @@ class CatanEnv(AECEnv):
             for agent in self.agents   
         }
                 
-        self.render_mode = render_mode
-        
         self.game_manager.gamestate = 'settle_phase'
         
         self.pass_action_index = 0
@@ -141,7 +165,7 @@ class CatanEnv(AECEnv):
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
 
         # reset game components
-        self.game_board = GameBoard()
+        self.game_board = GameBoard(self.tile_images, self.number_images)
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
@@ -350,6 +374,9 @@ class CatanEnv(AECEnv):
         
         try:
             self._accumulate_rewards()
+            
+            if self.render_mode == "human":
+                self.render()
         except TypeError as e:
             print(f"TypeError encountered: {e}")
             print(f"self.rewards[{agent}] = {self.rewards[agent]}")
@@ -462,7 +489,7 @@ class CatanEnv(AECEnv):
             elif action_type == 'place_city':
                 return 6
             elif action_type == 'place_road':
-                return 2
+                return 1.5
             elif action_type == 'pass_turn':
                 return -1.0
         else:
@@ -470,17 +497,81 @@ class CatanEnv(AECEnv):
     
     def render(self):
         
-        if self.render_mode is None:
-            gymnasium.logger.warn(
-                "Render function is called but render_mode is None"
-            )
+        if self.render_mode != "human" or not self.is_open:
             return
         
-        else:
-            gymnasium.logger.info("render mode not implemented yet, skipping")
+        self.screen.fill((100, 140, 250))
         
-    
+        self.game_board.draw(self.screen)
+        
+        self.draw_game_state()
+        
+        pygame.display.flip()
+        self.clock.tick(30)
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.is_open = False
+                pygame.quit()
+                
+    def draw_game_state(self):
+        y_offset = 10
+        for player in self.game_manager.players:
+            text = f"{player.get_color()} - VP: {player.victory_points} - Resources: {player.resources.values()}"
+            text_font = pygame.font.Font(None, 20)
+            text_surface = text_font.render(text, True, player.color)
+            self.screen.blit(text_surface, (10, y_offset))
+            y_offset += 20
+
+        
+    def load_resources(self):
+        if self.render_mode == "human":
+            base_path = os.path.join(os.path.dirname(__file__), '../../img/')
+            self.tile_width = int(self.hex_size * np.sqrt(3))
+            self.tile_height = int(self.hex_size * 2)
+            # Load tile images
+            self.tile_images = {
+                "wood": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "forest.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                ),
+                "brick": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "hills.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                ),
+                "sheep": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "pasture.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                ),
+                "wheat": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "field.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                ),
+                "ore": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "mountain.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                ),
+                "desert": pygame.transform.scale(
+                    pygame.image.load(os.path.join(base_path, 'terrainHexes/', "desert.png")),
+                    (self.tile_width * 1.02, self.tile_height * 1.02)
+                )
+            }
+            # Load number images
+            self.number_images = {}
+            for number in range(2, 13):
+                if number != 7:
+                    image_path = os.path.join(base_path, 'numbers/', f"{number}.png")
+                    self.number_images[number] = pygame.transform.scale(
+                        pygame.image.load(image_path),
+                        (self.number_size, self.number_size)
+                    )
+        else:
+            self.tile_images = None
+            self.number_images = None
+
     def close(self):
-        pass
+        if self.render_mode == "human" and self.is_open:
+            pygame.quit()
+            self.is_open = False
         
         
