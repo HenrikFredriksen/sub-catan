@@ -25,7 +25,7 @@ class GameRules:
     def is_valid_road_placement(self, edge, player, phase, last_placed_house_vertex=None):
         if edge.road is not None:
             return False
-        
+    
         if phase == 'settle_phase':
             if (last_placed_house_vertex and 
                 (edge.vertex1 == last_placed_house_vertex or 
@@ -34,28 +34,27 @@ class GameRules:
             return False
         
         elif phase == 'normal_phase':
-            if edge.vertex1.house and edge.vertex1.house.player == player:
+            if ((edge.vertex1.house and edge.vertex1.house.player == player) or 
+                (edge.vertex1.city and edge.vertex1.city.player == player)):
                 return True
-            if edge.vertex2.house and edge.vertex2.house.player == player:
+            if ((edge.vertex2.house and edge.vertex2.house.player == player) or 
+                (edge.vertex2.city and edge.vertex2.city.player == player)):
                 return True
 
-            for neighbor in edge.vertex1.neighbors:
-                if (neighbor != edge.vertex2 and 
-                    self.game_board.edges.get(tuple(sorted([edge.vertex1.position, 
-                                                            neighbor.position])))):
-                    if (self.game_board.edges[tuple(sorted([edge.vertex1.position, 
-                                                            neighbor.position]))].road and 
-                        self.game_board.edges[tuple(sorted([edge.vertex1.position, 
-                                                            neighbor.position]))].road.player == player):
-                        return True
-            for neighbor in edge.vertex2.neighbors:
-                if (neighbor != edge.vertex1 and 
-                    self.game_board.edges.get(tuple(sorted([edge.vertex2.position, 
-                                                            neighbor.position])))):
-                    if (self.game_board.edges[tuple(sorted([edge.vertex2.position, 
-                                                            neighbor.position]))].road and 
-                        self.game_board.edges[tuple(sorted([edge.vertex2.position, 
-                                                            neighbor.position]))].road.player == player):
+            for vertex, other_vertex in [(edge.vertex1, edge.vertex2), (edge.vertex2, edge.vertex1)]:
+                if ((vertex.house and vertex.house.player != player) or 
+                    (vertex.city and vertex.city.player != player)):
+                    continue
+                
+                
+                for neighbor in edge.vertex.neighbors:
+                    if (neighbor == other_vertex):
+                        continue
+                    edge_key = tuple(sorted([vertex.position, neighbor.position]))
+                    neighbor_edge = self.game_board.edges.get(edge_key)
+                    if (neighbor_edge and 
+                        neighbor_edge.road and 
+                        neighbor_edge.road.player == player):
                         return True
             return False
     
