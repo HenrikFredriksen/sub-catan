@@ -47,7 +47,7 @@ class GameRules:
                     continue
                 
                 
-                for neighbor in edge.vertex.neighbors:
+                for neighbor in vertex.neighbors:
                     if (neighbor == other_vertex):
                         continue
                     edge_key = tuple(sorted([vertex.position, neighbor.position]))
