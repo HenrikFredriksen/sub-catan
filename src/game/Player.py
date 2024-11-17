@@ -1,4 +1,21 @@
+'''
+Player class
 
+This class represents a player in the game. 
+It keeps track of the player's color, resources, settlements, roads, cities, and victory points. 
+It also provides methods to change the state of the player, such as:
+building:
+- settlements
+- roads
+- cities
+
+resource management:
+- trade with the bank
+- add or remove resources.
+
+@author: Henrik Tobias Fredriksen
+@date: 17. October 2024
+'''
 class Player:
     COLOR_NAMES = {
         (255, 0, 0): "Red",
@@ -8,14 +25,24 @@ class Player:
     }
     
     
-    def __init__(self, player_id, color, settlements=5, roads=15, cities=4, victory_points=0, resources={'wood': 0, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 0}):
+    def __init__(self, 
+                 player_id, 
+                 color, 
+                 settlements=5, 
+                 roads=15, 
+                 cities=4, 
+                 victory_points=0, 
+                 resources=None):
         self.player_id = player_id
         self.color = color
         self.victory_points = victory_points
         self.settlements = settlements
         self.roads = roads
         self.cities = cities
-        self.resources = resources
+        if resources is None:
+            self.resources = {'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}
+        else:
+            self.resources = resources
         
     def add_resource(self, resource, amount):
         self.resources[resource] += amount
