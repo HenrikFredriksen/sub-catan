@@ -8,13 +8,14 @@ class Player:
     }
     
     
-    def __init__(self, color, settlements, roads, cities):
+    def __init__(self, player_id, color, settlements=5, roads=15, cities=4, victory_points=0, resources={'wood': 0, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 0}):
+        self.player_id = player_id
         self.color = color
-        self.victory_points = 0
+        self.victory_points = victory_points
         self.settlements = settlements
         self.roads = roads
         self.cities = cities
-        self.resources = {'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 0}
+        self.resources = resources
         
     def add_resource(self, resource, amount):
         self.resources[resource] += amount

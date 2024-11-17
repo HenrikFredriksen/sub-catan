@@ -313,6 +313,104 @@ class GameManager:
     def remove_highlighted_locations(self):
         self.highlighted_vertecies = []
         self.highlighted_edges = []
-                        
+    
+    # To simulate to make training more feasible and faster    
+    def simulate_settle_phase(self):
+        players = self.players
+        game_board = self.game_board
+        game_rules = self.game_rules
+        console = self.console
+        
+        
+        settle_phase_players_stack = players + players[::-1]
+        player_resources = {player: set() for player in players}
+        occupied_vertices = set()
+        
+        for player in settle_phase_players_stack:
+            self.current_player_index = players.index(player)
+            
+            valid_vertecies = []
+            for vertex in game_board.vertices.values():
+                if vertex in occupied_vertices:
+                    continue
+                if not self.game_rules.is_valid_house_placement(vertex, player, phase='settle_phase'):
+                    continue                
+                resources = game_board.get_resources_adj_to_vertex(vertex)
+                num_resources = len(resources)
+                valid_vertecies.append((vertex, num_resources, resources))
                 
+            if not valid_vertecies:
+                console.log(f"{player.get_color()} has no valid house placements")
+                return False
+            
+            valid_vertecies.sort(key=lambda x: x[1], reverse=True)
+            chosen_vertex, _, resources = valid_vertecies[0]
+            occupied_vertices.add(chosen_vertex)
+            player_resources[player].update(resources.keys())
+            
+            if not self.simulate_place_house(chosen_vertex):
+                console.log(f"Could not place house for {player.get_color()}")
+                return False
+            
+            valid_edges = []
+            for neighbor in chosen_vertex.neighbors:
+                edge_key = tuple(sorted([chosen_vertex.position, neighbor.position]))
+                edge = game_board.edges.get(edge_key)
+                if not edge:
+                    continue
+                if not game_rules.is_valid_road_placement(edge, player, phase='settle_phase', last_placed_house_vertex=chosen_vertex):
+                    continue
+                valid_edges.append(edge)
+                
+            if not valid_edges:
+                console.log(f"{player.get_color()} has no valid road placements")
+                return False
+            
+            chosen_edge = valid_edges[0]
+            if not self.simulate_place_road(chosen_edge):
+                console.log(f"Could not place road for {player.get_color()}")
+                return False
+        
+        for player in players:
+            if len(player_resources[player]) < 4:
+                console.log(f"{player.get_color()} has less than 4 unique resources")
+                return False
+            
+        return True
+    
+    def simulate_place_house(self, vertex):
+        if self.game_rules.is_valid_house_placement(vertex, self.current_player, self.gamestate):
+            house = House(vertex=vertex, player=self.current_player)
+            vertex.house = house
+            self.current_player.victory_points += 1
+            self.current_player.settlements -= 1
+            self.last_placed_house_vertex[self.current_player] = vertex
+            
+            # Add these settlement phase flags
+            if self.gamestate == 'settle_phase':
+                self.has_placed_piece = True
+                self.starting_sub_phase = 'road'
+                self.settlement_count[self.current_player] = self.settlement_count.get(self.current_player, 0) + 1
+            
+            return True
+        return False
+    
+    def simulate_place_road(self, edge):
+        if self.game_rules.is_valid_road_placement(edge, 
+                                                   self.current_player, 
+                                                   self.gamestate, 
+                                                   self.last_placed_house_vertex.get(self.current_player)):
+            road = Road(vertex1=edge.vertex1, vertex2=edge.vertex2, player=self.current_player)
+            edge.road = road
+            self.current_player.roads -= 1
+            
+             # Add these settlement phase flags
+            if self.gamestate == 'settle_phase':
+                self.has_placed_piece = True
+                self.starting_sub_phase = 'house'
+                self.player_passed_turn = True
+                
+            return True
+        return False
+            
         
