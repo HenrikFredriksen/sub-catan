@@ -1,4 +1,12 @@
 from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CustomAgentSelector import CustomAgentSelector
+from game.GameBoard import GameBoard
+from game.GameManager_env import GameManager
+from game.GameRules import GameRules
+from game.Player import Player
+
+import numpy as np
+import random
 
 class CatanSettlePhaseEnv(CatanEnv):
     def __init__(self, writer=None):
@@ -89,11 +97,52 @@ class CatanSettlePhaseEnv(CatanEnv):
 
     def reset(self, seed=None, return_info=False, options=None):
         obs = super().reset()
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+            
+        self.step_count = 0
+        
+        self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
+        self.possible_agents = self.agents[:]
+        self.starting_agents = self.agents + self.agents[::-1]
+        self._agent_selector = CustomAgentSelector(self.starting_agents)
+        self.agent_selection = self.agents[0]
+        
+        self.rewards = {agent: 0 for agent in self.possible_agents}
+        self._cumulative_rewards = {agent: 0.0 for agent in self.possible_agents}
         self.number_of_full_res_settles = {agent: 0 for agent in self.possible_agents}
         self.terminations = {agent: False for agent in self.possible_agents}
         self.truncations = {agent: False for agent in self.possible_agents}
-        self.infos = {agent: {} for agent in self.possible_agents}
+        self.infos = {agent: {'seed': seed} for agent in self.possible_agents}
         
+        self.agent_name_mapping = dict(zip(self.agents, range(len(self.agents))))
+        
+        self.game_board = GameBoard()
+        self.game_board.set_screen_dimensions(1400, 700)
+        self.game_board.generate_board(board_radius=2)
+        
+        self.game_rules = GameRules(self.game_board)
+        self.players = [
+            Player(player_id=0, color=(255, 0, 0), settlements=5, roads=15, cities=4, resources={'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 2}),
+            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=15, cities=4, resources={'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 2}),
+            Player(player_id=2, color=(20, 220, 20), settlements=5, roads=15, cities=4, resources={'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 2}),
+            Player(player_id=3, color=(255, 165, 0), settlements=5, roads=15, cities=4, resources={'wood': 4, 'brick': 4, 'sheep': 2, 'wheat': 2, 'ore': 2})
+        ]
+        
+        self.vertices_list = list(self.game_board.vertices.values())
+        self.edges_list = list(self.game_board.edges.values())
+        
+        self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
+        self.game_manager.gamestate = 'settle_phase'
+        self.game_manager.has_placed_piece = False
+        self.was_placement_successful = False
+        
+        if self.render_mode == 'human':
+            self.render()
+            
+        self.observe(self.agent_selection)
+                
         if return_info:
             return obs, self.infos[self.agent_selection]
         return obs

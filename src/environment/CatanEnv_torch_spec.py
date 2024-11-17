@@ -5,6 +5,7 @@ from gymnasium import spaces
 import pygame
 import numpy as np
 import random
+import pickle
 import os
 
 from game.GameBoard import GameBoard
@@ -62,10 +63,10 @@ class CatanEnv(AECEnv):
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
-            Player(color=(255, 0, 0), settlements=5, roads=15, cities=4), # Red player
-            Player(color=(0, 0, 255), settlements=5, roads=15, cities=4), # Blue player
-            Player(color=(20, 220, 20), settlements=5, roads=15, cities=4), # Green player
-            Player(color=(255, 165, 0), settlements=5, roads=15, cities=4) # Orange player
+            Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2), # Red player
+            Player(player_id=1, color=(0, 0, 255), settlements=3, roads=13, cities=4, victory_points=2), # Blue player
+            Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2), # Green player
+            Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2) # Orange player
         ]
         
         if render_mode == "human":
@@ -104,7 +105,7 @@ class CatanEnv(AECEnv):
             for agent in self.agents   
         }
                 
-        self.game_manager.gamestate = 'settle_phase'
+        self.game_manager.gamestate = 'normal_phase'
         
         self.pass_action_index = 0
         self.roll_dice_action_index = 1
@@ -149,7 +150,7 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self._agent_selector = CustomAgentSelector(self.starting_agents)
+        self._agent_selector = agent_selector(self.possible_agents)
         self.agent_selection = self.agents[0]
         
         # reset game state dictionaries
@@ -165,27 +166,48 @@ class CatanEnv(AECEnv):
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
 
         # reset game components
-        self.game_board = GameBoard(self.tile_images, self.number_images)
+        self.game_board = self.load_random_board_normal_phase()
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
-            Player(color=(255, 0, 0), settlements=5, roads=15, cities=4), # Red player
-            Player(color=(0, 0, 255), settlements=5, roads=15, cities=4), # Blue player
-            Player(color=(20, 220, 20), settlements=5, roads=15, cities=4), # Green player
-            Player(color=(255, 165, 0), settlements=5, roads=15, cities=4) # Orange player
+            Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2), # Red player
+            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=13, cities=4, victory_points=2), # Blue player
+            Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2), # Green player
+            Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2) # Orange player
         ]
-
+        
+        player_id_map = {player.player_id: player for player in self.players}
+        
+        for vertex in self.game_board.vertices.values():
+            if vertex.house:
+                vertex_house_player_id = vertex.house.player.player_id
+                vertex.house.player = player_id_map[vertex_house_player_id]
+            if vertex.city:
+                vertex_city_player_id = vertex.city.player.player_id
+                vertex.city.player = player_id_map[vertex_city_player_id]
+        for edge in self.game_board.edges.values():
+            if edge.road:
+                edge_road_player_id = edge.road.player.player_id
+                edge.road.player = player_id_map[edge_road_player_id]
+                
+        print(f"Players in player_id_map: {list(player_id_map.keys())}")
+        for vertex in self.game_board.vertices.values():
+            if vertex.house:
+                print(f"House player_id: {vertex.house.player.player_id}")
         # reset game manager and generate new board
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
-        self.game_board.generate_board(board_radius=2)
+        self.game_manager.gamestate = 'normal_phase'
+        self.game_manager.dice_rolled = False
+        #self.game_board.generate_board(board_radius=2)
+        
+        # reset vertices and edges lists
         self.vertices_list = list(self.game_board.vertices.values())
         self.edges_list = list(self.game_board.edges.values())
-        #self._reset_game()
-
-        self.game_manager.gamestate = 'settle_phase'
-        self.game_manager.dice_rolled = False
 
         if self.render_mode == "human":
+            self.load_resources()
+            self.game_board.tile_images = self.tile_images
+            self.game_board.number_images = self.number_images
             self.render()
                  
         obs = self.observe(self.agent_selection)
@@ -193,6 +215,17 @@ class CatanEnv(AECEnv):
         if return_info:
             return obs, self.infos[self.agent_selection]
         return obs
+    
+    def load_random_board_normal_phase(self):
+        board_files = os.listdir('normal_phase_boards')
+        if not board_files:
+            raise Exception("No saved boards found in 'saved_boards' directory")
+        random_board_file = random.choice(board_files)
+        file_path = os.path.join('normal_phase_boards', random_board_file)
+        with open(file_path, 'rb') as f:
+            game_board = pickle.load(f)
+            print(f"Loaded board from {file_path}")
+        return game_board
     
     def observe(self, agent):
         board_state = self.get_board_state()
@@ -489,9 +522,9 @@ class CatanEnv(AECEnv):
             elif action_type == 'place_city':
                 return 6
             elif action_type == 'place_road':
-                return 1.5
+                return 0.0
             elif action_type == 'pass_turn':
-                return -1.0
+                return -1.1
         else:
             return -1.0
     
