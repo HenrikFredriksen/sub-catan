@@ -29,12 +29,12 @@ def env(render_mode=None):
     return env
 
 class CatanEnv(AECEnv):
-    metadata = {'render.modes': ['human'], 'name': 'catan_v0'}
+    metadata = {'render.modes': ['human', 'rgb_array'], 'name': 'catan_v0'}
     
     def __init__(self, render_mode=None):
         super().__init__()
         self.render_mode = render_mode
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "rgb_array":
             pygame.init()
             self.screen_width = 1400
             self.screen_height = 700
@@ -190,21 +190,28 @@ class CatanEnv(AECEnv):
                 edge_road_player_id = edge.road.player.player_id
                 edge.road.player = player_id_map[edge_road_player_id]
                 
-        print(f"Players in player_id_map: {list(player_id_map.keys())}")
-        for vertex in self.game_board.vertices.values():
-            if vertex.house:
-                print(f"House player_id: {vertex.house.player.player_id}")
         # reset game manager and generate new board
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_manager.gamestate = 'normal_phase'
         self.game_manager.dice_rolled = False
         #self.game_board.generate_board(board_radius=2)
         
+        print(f"Players in player_id_map: {list(player_id_map.keys())}")
+        houses_with_settle_bonus = {player.player_id: False for player in self.players}
+        for vertex in self.game_board.vertices.values():
+            if vertex.house:
+                print(f"House player_id: {vertex.house.player.player_id}")
+                player = vertex.house.player
+                if not houses_with_settle_bonus[player.player_id]:
+                    self.game_manager.settlement_bonus(vertex)
+                    houses_with_settle_bonus[player.player_id] = True
+                
+        
         # reset vertices and edges lists
         self.vertices_list = list(self.game_board.vertices.values())
         self.edges_list = list(self.game_board.edges.values())
 
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "rgb_array":
             self.load_resources()
             self.game_board.tile_images = self.tile_images
             self.game_board.number_images = self.number_images
@@ -529,28 +536,31 @@ class CatanEnv(AECEnv):
             return -1.0
     
     def render(self):
-        
-        if self.render_mode != "human" or not self.is_open:
-            return
+        if not self.is_open:
+            return None
         
         self.screen.fill((100, 140, 250))
-        
         self.game_board.draw(self.screen)
-        
         self.draw_game_state()
         
-        pygame.display.flip()
-        self.clock.tick(30)
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.is_open = False
-                pygame.quit()
+        if self.render_mode == "human":
+            pygame.display.flip()
+            self.clock.tick(30)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.is_open = False
+                    pygame.quit()
+                    
+        return np.transpose(
+            np.array(pygame.surfarray.pixels3d(self.screen)), 
+            axes=(1, 0, 2)
+        )
                 
     def draw_game_state(self):
         y_offset = 10
         for player in self.game_manager.players:
-            text = f"{player.get_color()} - VP: {player.victory_points} - Resources: {player.resources.values()}"
+            text = player.__str__()
             text_font = pygame.font.Font(None, 20)
             text_surface = text_font.render(text, True, player.color)
             self.screen.blit(text_surface, (10, y_offset))
@@ -558,7 +568,7 @@ class CatanEnv(AECEnv):
 
         
     def load_resources(self):
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "rgb_array":
             base_path = os.path.join(os.path.dirname(__file__), '../../img/')
             self.tile_width = int(self.hex_size * np.sqrt(3))
             self.tile_height = int(self.hex_size * 2)
@@ -603,7 +613,7 @@ class CatanEnv(AECEnv):
             self.number_images = None
 
     def close(self):
-        if self.render_mode == "human" and self.is_open:
+        if (self.render_mode == "human" and self.is_open) or (self.render_mode == "rgb_array" and self.is_open):
             pygame.quit()
             self.is_open = False
         
