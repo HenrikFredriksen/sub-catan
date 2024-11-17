@@ -1,6 +1,8 @@
 # sub-catan
 environment that represents a simple for of catan, with an interface for agent training
 
+---------------------------------------------------------------------------------------
+![Demo](demo/demo.gif)
 # Requirements
 -	Python 3.11.9
 -	Pygame 2.6.1
