@@ -8,6 +8,7 @@ from collections import deque
 import time
 import os
 import traceback
+import imageio
 
 from environment.CatanEnv_torch_spec import CatanEnv
 from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv
@@ -270,9 +271,6 @@ class MultiAgentPPO:
                 
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
-
             for epoch in range(self.n_epochs):
                 policy, value = network(states, action_masks)
 
@@ -308,6 +306,8 @@ class MultiAgentPPO:
 
                 optimizer.zero_grad()
                 loss.backward()
+                # Gradient clipping
+                torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
                 optimizer.step()
 
                 # Collect for logging
@@ -484,9 +484,9 @@ class MultiAgentPPO:
             print(f"{agent_id} final reward: {episode_reward[agent_id]}")
 
 def pretrain_settlement_phase():
-    writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
+    writer = SummaryWriter(log_dir='run_logs/catan_settle_pretraining')
     env = CatanSettlePhaseEnv(writer=writer)
-    writer = SummaryWriter(log_dir='runs/catan_settle_pretraining')
+    writer = SummaryWriter(log_dir='run_logs/catan_settle_pretraining')
     
     agent_policies = {
         'player_1': 'baseline',
@@ -525,7 +525,7 @@ def pretrain_settlement_phase():
 def main():
     env = CatanEnv()
     
-    writer = SummaryWriter(log_dir='runs/catan_training')
+    writer = SummaryWriter(log_dir='run_logs/catan_training')
     
     agent_policies = {
         'player_1': 'baseline',
@@ -570,7 +570,11 @@ def main():
     return ppo
 
 def eval_trained_agents():
-    env = CatanEnv(render_mode='human')
+    os.makedirs("game_frames", exist_ok=True)
+    render_mode = 'human'
+    env = CatanEnv(render_mode=render_mode)
+    
+    frames = []
     env.reset()
     
     ppo = MultiAgentPPO(
@@ -595,8 +599,9 @@ def eval_trained_agents():
             print(f"Loaded model for agent {agent_id}")
     
     done = False
+    frame_count = 0
+    
     while not done:
-        
         if all(env.terminations.values()):
             done = True
             env.close()
@@ -610,14 +615,32 @@ def eval_trained_agents():
             else:
                 action = ppo.choose_action(env.agent_selection, observation)[0]
             env.step(action)
-            if env.render_mode == 'human':
-                env.render()
+            
+            if render_mode == 'rgb_array':
+                frame = env.render()
+                if frame is not None:
+                    print(f"Captured frame with shape: {frame.shape}")
+                    frames.append(frame)
+
+                frame_count += 1
                 
         except Exception as e:
             print(f"Error in evaluation loop: {e}")
             print(f"agent_selection: {env.agent_selection}")
             traceback.print_exc()
             break
+        
+    env.close()
+        
+    if frames and render_mode == 'rgb_array':
+        print("Saving frames to gif")
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        imageio.mimsave(
+            f"game_frames/game_{timestamp}.gif", 
+            frames,
+            fps=2
+        )
+        print(f"Game saved as game/frames/catangame_{timestamp}.gif")
 
 if __name__ == "__main__":
     #pretrain_settlement_phase()
