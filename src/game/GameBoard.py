@@ -21,6 +21,10 @@ class GameBoard:
         self.tile_images = tile_images
         self.number_images = number_images
         
+    def clean_for_serialization(self):
+        self.tile_images = None
+        self.number_images = None
+        
     def add_tile(self, resource, number, q, r):
         position = HexCoordinate(q, r)
         tile = Tile(resource, number, position)
