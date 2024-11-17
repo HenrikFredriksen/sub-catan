@@ -54,25 +54,31 @@ class GameManager:
         for player in self.players:
             total_resources = sum(player.resources.values())
             if total_resources > 7:
-                resources = player.resources
-                half = total_resources // 2
-                # sort resources by amount
-                sorted_resources = sorted(resources.items(), key=lambda x: x[1])
+                
+                resources_to_keep = total_resources // 2
+                current_resources = dict(player.resources)
+                
+                sorted_resources = sorted(
+                    current_resources.items(), 
+                    key=lambda x: x[1],
+                    reverse=True
+                )
                 
                 for resource in player.resources:
                     player.resources[resource] = 0
                     
-                resource_kept = 0
-                for resource, amount in reversed(sorted_resources):
-                    if resource_kept + amount <= half:
-                        player.resources[resource] = amount
-                        resource_kept += amount
-                    else:
-                        player.resources[resource] = half - resource_kept
+                remainder_to_keep = resources_to_keep
+                for resource, amount in sorted_resources:
+                    if remainder_to_keep <= 0:
                         break
-                self.console.log(f"{player.get_color()} lost half of their resources")
+                    
+                    keep_amount = min(amount, remainder_to_keep)
+                    player.resources[resource] = keep_amount
+                    remainder_to_keep -= keep_amount
+                
+                self.console.log(f"{player.get_color()} had to discard resources (kept {resources_to_keep})")
             else:
-                self.console.log(f"{player.get_color()} has {total_resources}, not robbed")
+                self.console.log(f"{player.get_color()} did not have to discard resources, total resources: {total_resources}")
             
     def is_turn_over(self):
         if self.player_passed_turn:
@@ -94,7 +100,7 @@ class GameManager:
 
     def check_if_game_ended(self):
         if self.current_player.victory_points >= 10:
-            self.console.log(f"Player {self.current_player.get_color()} won the game!")
+            self.console.log(f"Player {self.current_player.get_color()} won the game with {self.current_player.get_victory_points()}!")
             self.game_ended_by_victory_points = True
             self.game_over = True
             return True
@@ -128,21 +134,21 @@ class GameManager:
         for tile in self.game_board.tiles.values():
             if tile.get_number() == roll:
                 for vertex in self.game_board.get_tile_vertices(tile):
-                    # check if there is a house on the vertex
                     if vertex.house:
-                        # check if the player has max resources
-                        if vertex.house.player.resources.get(tile.resource) < 25:
-                            self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource}")
-                            vertex.house.player.add_resource(tile.resource, 1)
+                        player = vertex.house.player
+                        if player.resources.get(tile.resource, 0) < 25:
+                            player.add_resource(tile.resource, 1)
+                            self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
                         else:
                             print("Player has max resources")
                     elif vertex.city:
-                        if vertex.city.player.resources.get(tile.resource) < 24:
-                            self.console.log(f"{vertex.city.player.get_color()} collected 2 {tile.resource}")
-                            vertex.city.player.add_resource(tile.resource, 2)
-                        elif vertex.city.player.resources.get(tile.resource) == 24:
-                            self.console.log(f"{vertex.city.player.get_color()} collected 1 {tile.resource}")
-                            vertex.city.player.add_resource(tile.resource, 1)
+                        player = vertex.city.player
+                        if player.resources.get(tile.resource, 0) < 24:
+                            player.add_resource(tile.resource, 2)
+                            self.console.log(f"{player.get_color()} collected 2 {tile.resource}")
+                        elif player.resources.get(tile.resource, 0) == 24:
+                            player.add_resource(tile.resource, 1)
+                            self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
                         else:
                             print("Player has max resources")
                         
