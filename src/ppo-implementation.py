@@ -7,6 +7,7 @@ from torch.distributions import Categorical
 from collections import deque
 import time
 import os
+import traceback
 
 from environment.CatanEnv_torch_spec import CatanEnv
 from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv
@@ -452,18 +453,18 @@ class MultiAgentPPO:
 
         rankings = sorted(victory_points.items(), key=lambda x: x[1], reverse=True)
 
-        position_scalars = {
-            0: 1.5,
-            1: 1.0,
-            2: 0.5,
-            3: 0.1
+        position_rewards = {
+            0: 40,
+            1: 25,
+            2: 5,
+            3: 0
         }
 
         for position, (agent_id, vp) in enumerate(rankings):
             self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
 
-            scalar = position_scalars[position]
-            episode_reward[agent_id] *= scalar
+            scalar = position_rewards[position]
+            episode_reward[agent_id] += scalar
 
             if position == 0 and self.env.game_manager.game_ended_by_victory_points:
                 extra_reward = 20
@@ -489,9 +490,9 @@ def pretrain_settlement_phase():
     
     agent_policies = {
         'player_1': 'baseline',
-        'player_2': 'explorative',
+        'player_2': 'baseline',
         'player_3': 'baseline',
-        'player_4': 'explorative'
+        'player_4': 'baseline'
     }
 
     ppo = MultiAgentPPO(
@@ -505,10 +506,10 @@ def pretrain_settlement_phase():
         gae_lambda=0.95,
         clip_epsilon=0.4,
         n_epochs=4,
-        max_steps=10000
+        max_steps=5000
     )
 
-    n_episodes = 1500
+    n_episodes = 500
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed)
 
@@ -528,9 +529,9 @@ def main():
     
     agent_policies = {
         'player_1': 'baseline',
-        'player_2': 'explorative',
+        'player_2': 'baseline',
         'player_3': 'baseline',
-        'player_4': 'explorative'
+        'player_4': 'baseline'
     }
     
     # Init PPO agent
@@ -545,11 +546,11 @@ def main():
         gae_lambda=0.95,
         clip_epsilon=0.4,
         n_epochs=4,
-        max_steps=10000
+        max_steps=5000
     )
 
     for agent_id in ppo.agents:
-        pretrained_path = f"pretrained_settle_{agent_id}.pt"
+        pretrained_path = f"best_model_agent_player_{agent_id}.pt"
         if os.path.exists(pretrained_path):
             ppo.agents[agent_id]["network"].load_state_dict(
                 torch.load(pretrained_path)
@@ -557,9 +558,9 @@ def main():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 10000
+    n_episodes = 2
     base_seed = 42
-    rewards = ppo.train(n_episodes, seed=base_seed, max_turns_without_building=1000)
+    rewards = ppo.train(n_episodes, seed=base_seed, max_turns_without_building=2000)
     
     writer.close()
     
@@ -614,10 +615,15 @@ def eval_trained_agents():
                 
         except Exception as e:
             print(f"Error in evaluation loop: {e}")
+            print(f"agent_selection: {env.agent_selection}")
+            traceback.print_exc()
             break
 
 if __name__ == "__main__":
     #pretrain_settlement_phase()
-    main()
-    #eval_trained_agents()
+    #main()
+    
+    num_evals = 10
+    for _ in range(num_evals):
+        eval_trained_agents()
     
