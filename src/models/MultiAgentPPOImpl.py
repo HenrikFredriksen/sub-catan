@@ -10,7 +10,7 @@ import os
 import traceback
 import imageio
 
-from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CatanEnv import CatanEnv
 from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv
 
 class PPONetwork(nn.Module):
