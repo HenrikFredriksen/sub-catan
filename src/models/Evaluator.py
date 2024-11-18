@@ -56,7 +56,6 @@ def eval_trained_agents(render_mode='human', gamestate='normal_phase'):
             if render_mode == 'rgb_array':
                 frame = env.render()
                 if frame is not None:
-                    print(f"Captured frame with shape: {frame.shape}")
                     frames.append(frame)
 
                 frame_count += 1
@@ -75,7 +74,7 @@ def eval_trained_agents(render_mode='human', gamestate='normal_phase'):
         imageio.mimsave(
             f"game_frames/game_{timestamp}.gif", 
             frames,
-            fps=2
+            fps=12
         )
         print(f"Game saved as game/frames/catangame_{timestamp}.gif")
 

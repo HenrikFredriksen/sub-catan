@@ -1,6 +1,5 @@
 from pettingzoo.utils.env import AECEnv
 from pettingzoo.utils import agent_selector, wrappers
-import gymnasium
 from gymnasium import spaces
 import pygame
 import numpy as np
@@ -17,14 +16,16 @@ from assets.Console import Console
 from environment.CustomAgentSelector import CustomAgentSelector
 
 def env(render_mode=None):
-    internal_render_mode = render_mode if render_mode != "ansi" else "human"
+    internal_render_mode = render_mode if render_mode in ["human", "rgb_array"] else None
     
     env = CatanEnv(render_mode=internal_render_mode)
     if render_mode == "ansi":
         env = wrappers.CaptureStdoutWrapper(env)
-        
+    elif render_mode == "human":
+        pass
+    elif render_mode == "rgb_array":
+        pass
     env = wrappers.AssertOutOfBoundsWrapper(env)
-    
     env = wrappers.OrderEnforcingWrapper(env)
     return env
 
@@ -249,6 +250,8 @@ class CatanEnv(AECEnv):
         if self.gamestate == 'normal_phase':
             self._agent_selector = agent_selector(self.possible_agents)
             self.game_board = self.load_random_board_normal_phase()
+            self.game_board.set_screen_dimensions(1400, 700)
+            self.game_rules = GameRules(self.game_board)
             self.players = [
             Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2, 
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Red player
@@ -259,10 +262,14 @@ class CatanEnv(AECEnv):
             Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2,
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}) # Orange player
             ]
+            self.vertices_list = list(self.game_board.vertices.values())
+            self.edges_list = list(self.game_board.edges.values())
         # Settle phase
         else:
             self._agent_selector = CustomAgentSelector(self.starting_agents)
             self.game_board.generate_board(board_radius=2)
+            self.game_board.set_screen_dimensions(1400, 700)
+            self.game_rules = GameRules(self.game_board)
             self.players = [
             Player(player_id=0, color=(255, 0, 0), settlements=5, roads=15, cities=4, victory_points=0, 
                    resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}), # Red player
@@ -273,6 +280,8 @@ class CatanEnv(AECEnv):
             Player(player_id=3, color=(255, 165, 0), settlements=5, roads=15, cities=4, victory_points=0,
                    resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}) # Orange player
             ]
+            self.vertices_list = list(self.game_board.vertices.values())
+            self.edges_list = list(self.game_board.edges.values())
 
         player_id_map = {player.player_id: player for player in self.players}
         
@@ -306,8 +315,8 @@ class CatanEnv(AECEnv):
                 
         
         # reset vertices and edges lists
-        self.vertices_list = list(self.game_board.vertices.values())
-        self.edges_list = list(self.game_board.edges.values())
+        #self.vertices_list = list(self.game_board.vertices.values())
+        #self.edges_list = list(self.game_board.edges.values())
 
         if self.render_mode == "human" or self.render_mode == "rgb_array":
             self.load_resources()
@@ -678,7 +687,7 @@ class CatanEnv(AECEnv):
             self.screen.blit(text_surface, (10, y_offset))
             y_offset += 20
             
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "rgb_array":
             self.console.draw(self.screen)
         
     def load_resources(self):
