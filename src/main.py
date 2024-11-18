@@ -34,6 +34,6 @@ if __name__ == "__main__":
 
     # render_mode = 'rgb_array' or 'human'
     # gamestate = 'normal_phase' or 'settle_phase'
-    num_evals = 10
+    num_evals = 3
     for _ in range(num_evals):
-        eval_trained_agents(render_mode='human', gamestate='normal_phase')
+        eval_trained_agents(render_mode='rgb_array', gamestate='normal_phase') # Evaluate the trained agents
