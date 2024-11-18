@@ -3,17 +3,18 @@ Sub-Catan is a simplified implementation of the board game Catan, designed as a 
 compatible with the PettingZoo library. It makes it possible to train models compatible with the gym API in this turn-based multi-
 agent setting, with room to expand on the gamerules and actions!
 
-!!! The environment is located at branch 4-Agents-interface-torch, main branch is only a playable version !!!
-
 ## Table of Contents
 - Features
 - Requirements
 - Installation
 - Project Structure
 - Usage
+    - Running Configuration
+    - Monitor Training
 - Environment Details
-- Examples
-- License
+    - Action Space
+    - Observation Space
+    - Reward Function
 - Contact Information
 
 ## Features
@@ -27,20 +28,19 @@ agent setting, with room to expand on the gamerules and actions!
 ## Requirements
 Python 3.11.9 (at least 3.9 or higher, this is not tested)
 
-numpy==2.1.3
+`numpy==2.1.3`
 
-gymnasium==1.0.0
+`gymnasium==1.0.0`
 
-pettingzoo==1.24.3
+`pettingzoo==1.24.3`
 
-torch==2.5.1
+`torch==2.5.1`
 
-tensorboard==2.18.0
+`tensorboard==2.18.0`
 
-pygame==2.6.1
+`pygame==2.6.1`
 
-imageio==2.36.0
-
+`imageio==2.36.0`
 
 linux distro is highly recommended, a WSL installation of Ubuntu 22.04 with a miniconda virtual environment 
 was used for development.
@@ -68,25 +68,25 @@ or install packages individually:
 
 ## Project Structure
 
-- main.py: The main entry point of the project. Contains functions to run all runnable modes of the project, game loop
+- `main.py`: The main entry point of the project. Contains functions to run all runnable modes of the project, game loop
 train models, pretrain settlement phase, and evaluating trained agents
-- environment/: Contains the custom environment implementation for Sub-Catan
--    - CatanEnv.py: Defines the CatanEnv class, the PettingZoo AECEnv main environment
--    - CustomAgentSelector.py: Custom agent selector for managing agent turn order in the settle phase.
-- game/: Contains game logic and components:
--    - GameBoard.py: Defines the game board structure.
--    - GameManager_env.py: Manages the game state updates and agent actions.
--    - GameRules.py: Contains the game rules for validation of player moves.
--    - Player.py: Represents player states
--    - House.py / City.py /Road.py: represent game pieces.
-- models/: Contains models and training scripts
--    - Trainer.py: Conatins training routines for agents.
--    - Evaluator.py: Functions to evaluate trained agents.
-- assets/: Contains utility classes.
--    - Console.py / PrintConsole.py: Utilities for logging and printing game events.
-- gameloop/: Contains the game loop for playtesting the game yourself.
--    - Gameloop.py
-- requirements.txt: List of all Python dependencies
+- `environment/`: Contains the custom environment implementation for Sub-Catan
+    - `CatanEnv.py`: Defines the CatanEnv class, the PettingZoo AECEnv main environment
+    - `CustomAgentSelector.py`: Custom agent selector for managing agent turn order in the settle phase.
+- `game/`: Contains game logic and components:
+    - `GameBoard.py`: Defines the game board structure.
+    - `GameManager_env.py`: Manages the game state updates and agent actions.
+    - `GameRules.py`: Contains the game rules for validation of player moves.
+    - `Player.py`: Represents player states
+    - `House.py` / `City.py` / `Road.py`: represent game pieces.
+- `models/`: Contains models and training scripts
+    - `Trainer.py`: Conatins training routines for agents.
+    - `Evaluator.py`: Functions to evaluate trained agents.
+- `assets/`: Contains utility classes.
+    - `Console.py` / `PrintConsole.py`: Utilities for logging and printing game events.
+- `gameloop/`: Contains the game loop for playtesting the game yourself.
+    - `Gameloop.py`
+- `requirements.txt`: List of all Python dependencies
 
 ## Usage
 
@@ -101,7 +101,7 @@ There is currently 4 configurations in the main.py to entry different scripts of
 ### Monitor training
 Training logs and metrics are saved using TensorBoard. 
 
-tensorboard --logdir run_logs/
+    tensorboard --logdir run_logs/
 
 ## Environment Details
 ### Action space
@@ -115,7 +115,7 @@ The action space is a Discrete space of size determined by the number of possibl
 
 The total action space size is calculated using the number of vertices and edges:
 
-action_space_size = 2 + 2 * num_vertecies + num_edges
+    action_space_size = 2 + 2 * num_vertecies + num_edges
 
 - 2 for pass and roll dice actions
 - num_vertecies for settlement actions
@@ -126,23 +126,23 @@ action_space_size = 2 + 2 * num_vertecies + num_edges
 The observation space is a Dict containing:
 - action_mask: A binary vector indication valid actions at the current state
 - observation: A flattened vector representing:
--    - Board State: Includes information about vertices, edges, and tiles. 
--    -    - Vertex states (houses, cities)
--    -    - Edge states (roads)
--    -    - Tile states (resources, numbers)
--    - Player State: Players resources, remaining pieces and victory points
--    - Enemy State: Aggregated resources and victory points of other players.
+    - Board State: Includes information about vertices, edges, and tiles. 
+        - Vertex states (houses, cities)
+        - Edge states (roads)
+        - Tile states (resources, numbers)
+    - Player State: Players resources, remaining pieces and victory points
+    - Enemy State: Aggregated resources and victory points of other players.
 
 ### Reward function
 Rewards is given based on the player's actions and game progress:
 
 - Positive for:
--    - Winning the game, or placement (first to last)
--    - Building settlements and cities (actions leadning to victory points)
--    - Rolling dice (to encurage partaking rather than just passing turns)
+    - Winning the game, or placement (first to last)
+    - Building settlements and cities (actions leadning to victory points)
+    - Rolling dice (to encurage partaking rather than just passing turns)
 - Negative for:
--    - Invalid actions
--    - Passing turns (encurage progress)
+    - Invalid actions
+    - Passing turns (encurage progress)
 
 In the current iteration, the point is to encurage the agents to gain victory points as fast as possible.
 
