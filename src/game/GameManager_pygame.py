@@ -51,7 +51,7 @@ class GameManager:
         
         roll = self.roll_dice()
         if roll == 7:
-            #implement robber
+            self.robber()
             self.console.log("Robber moves")
             print("Robber moves")
             
@@ -62,6 +62,36 @@ class GameManager:
         if self.turn >= 1:
             self.change_player()         
         self.turn += 1
+    
+    def robber(self):
+        for player in self.players:
+            total_resources = sum(player.resources.values())
+            if total_resources > 7:
+                
+                resources_to_keep = total_resources // 2
+                current_resources = dict(player.resources)
+                
+                sorted_resources = sorted(
+                    current_resources.items(), 
+                    key=lambda x: x[1],
+                    reverse=True
+                )
+                
+                for resource in player.resources:
+                    player.resources[resource] = 0
+                    
+                remainder_to_keep = resources_to_keep
+                for resource, amount in sorted_resources:
+                    if remainder_to_keep <= 0:
+                        break
+                    
+                    keep_amount = min(amount, remainder_to_keep)
+                    player.resources[resource] = keep_amount
+                    remainder_to_keep -= keep_amount
+                
+                self.console.log(f"{player.get_color()} had to discard resources (kept {resources_to_keep})")
+            else:
+                self.console.log(f"{player.get_color()} did not have to discard resources, total resources: {total_resources}")
          
     def starting_phase(self):
         if self.starting_sub_phase == 'house':

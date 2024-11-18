@@ -7,9 +7,9 @@ import pygame
 import numpy as np
 
 class GameBoard:
-    def __init__(self, tile_images=None, number_images=None):
-        self.screen_width = 1400
-        self.screen_height = 700
+    def __init__(self, tile_images=None, number_images=None, screen_width=1400, screen_height=700):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
         self.hex_size = 80
         self.tiles = {}
         self.vertices = {}
@@ -94,35 +94,56 @@ class GameBoard:
         return numbers
         
     # Only for debugging
-    #def draw_grid(self, screen):
-    #    for tile in self.tiles.values():
-    #        corners = self.get_hex_corners(tile.position)
-    #        pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
-    #    
-    #def draw_vertices(self, screen, highlighted_vertices):
-    #    for vertex in self.vertices.values():
-    #        if vertex in highlighted_vertices:
-    #            pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
-    #            
-    #        elif vertex.house:
-    #            pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
-    #            pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
-    #        
-    #        elif vertex.city:
-    #            pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
-    #            pygame.draw.rect(screen, vertex.city.player.color, 
-    #                             (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
-    #            
-    #def draw_edges(self, screen, highlighted_edges):
-    #    for edge in self.edges.values():
-    #        if edge in highlighted_edges:
-    #            pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
-    #            
-    #        if edge.road:
-    #            pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
-    #            pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
-    #        
-    #    
+    def draw_grid(self, screen):
+        for tile in self.tiles.values():
+            corners = self.get_hex_corners(tile.position)
+            pygame.draw.polygon(screen, (0, 0, 0), corners, 1)
+        
+    def draw_vertices(self, screen, highlighted_vertices):
+        for vertex in self.vertices.values():
+            if vertex in highlighted_vertices:
+                pygame.draw.circle(screen, (255, 255, 255), vertex.position, 10)
+                
+            elif vertex.house:
+                pygame.draw.circle(screen, (0,0,0), vertex.position, 10)
+                pygame.draw.circle(screen, vertex.house.player.color, vertex.position, 8)
+            
+            elif vertex.city:
+                pygame.draw.rect(screen, (0,0,0), (vertex.position[0] - 10, vertex.position[1] - 10, 20, 20))
+                pygame.draw.rect(screen, vertex.city.player.color, 
+                                 (vertex.position[0] - 8, vertex.position[1] - 8, 16, 16))
+                
+    def draw_edges(self, screen, highlighted_edges):
+        for edge in self.edges.values():
+            if edge in highlighted_edges:
+                pygame.draw.line(screen, (255, 255, 255), edge.vertex1.position, edge.vertex2.position, 6)
+                
+            if edge.road:
+                pygame.draw.line(screen, (0, 0, 0), edge.vertex1.position, edge.vertex2.position, 6)
+                pygame.draw.line(screen, edge.road.player.color, edge.vertex1.position, edge.vertex2.position, 4)
+            
+    def draw_game_loop(self, screen, highlighted_vertices, highlighted_edges):
+        for tile in self.tiles.values():
+            if self.tile_images and tile.resource in self.tile_images:
+                image = self.tile_images[tile.resource]
+                x, y = self.hex_to_pixel(tile.position)
+
+                x -= self.tile_width // 2
+                y -= self.tile_height // 2
+                screen.blit(image, (x, y))
+            else:
+                print(f"Resource {tile.resource} not found in tile images")
+                pass
+            
+            if self.number_images and tile.number in self.number_images:
+                number_image = self.number_images[tile.number]
+                screen.blit(number_image, (x + self.tile_width // 2 - number_image.get_width() // 2, 
+                                           y + self.tile_height // 2 - number_image.get_height() // 2))
+            else:
+                pass        
+        self.draw_edges(screen, highlighted_edges)
+        self.draw_vertices(screen, highlighted_vertices)
+        
     # Draw the tiles, vertices and edges
     def draw(self, screen):
         for tile in self.tiles.values():
