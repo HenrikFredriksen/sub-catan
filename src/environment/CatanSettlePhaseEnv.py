@@ -1,4 +1,4 @@
-from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CatanEnv import CatanEnv
 from environment.CustomAgentSelector import CustomAgentSelector
 from game.GameBoard import GameBoard
 from game.GameManager_env import GameManager

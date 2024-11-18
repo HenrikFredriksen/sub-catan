@@ -3,7 +3,7 @@ import torch
 
 from torch.utils.tensorboard import SummaryWriter
 from src.models.MultiAgentPPOImpl import MultiAgentPPO
-from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CatanEnv import CatanEnv
 from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv 
 
 def pretrain_settlement_phase():
@@ -45,7 +45,7 @@ def pretrain_settlement_phase():
     writer.close()
     return ppo
 
-def train(gamestate='normal_phase'):
+def train(gamestate='normal_phase', n_episodes=2500):
     # Change gamestate 'settle_phase' to run whole game training
     # Change gamestate 'normal_phase' to run normal phase training with loaded board
     env = CatanEnv(gamestate=gamestate)
@@ -83,7 +83,6 @@ def train(gamestate='normal_phase'):
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 5000
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed, max_turns_without_building=2000)
     

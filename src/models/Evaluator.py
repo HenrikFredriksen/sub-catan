@@ -5,7 +5,7 @@ import torch
 import imageio
 
 from .MultiAgentPPOImpl import MultiAgentPPO
-from environment.CatanEnv_torch_spec import CatanEnv
+from environment.CatanEnv import CatanEnv
 
 def eval_trained_agents(render_mode='human', gamestate='normal_phase'):
     os.makedirs("game_frames", exist_ok=True)
