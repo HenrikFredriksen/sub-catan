@@ -7,10 +7,9 @@ import imageio
 from .MultiAgentPPOImpl import MultiAgentPPO
 from environment.CatanEnv_torch_spec import CatanEnv
 
-def eval_trained_agents():
+def eval_trained_agents(render_mode='human', gamestate='normal_phase'):
     os.makedirs("game_frames", exist_ok=True)
-    render_mode = 'human'
-    env = CatanEnv(render_mode=render_mode)
+    env = CatanEnv(render_mode=render_mode, gamestate=gamestate)
     
     frames = []
     env.reset()

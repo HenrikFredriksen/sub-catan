@@ -29,11 +29,92 @@ def env(render_mode=None):
     return env
 
 class CatanEnv(AECEnv):
-    metadata = {'render.modes': ['human', 'rgb_array'], 'name': 'catan_v0'}
+    '''
+    A custom implementation of the Catan game environment 
+    using AECEnv from the PettingZoo library.
     
-    def __init__(self, render_mode=None):
+    Args:
+        render_mode (str, optional): The mode in which to render the environment. 
+        Options are 'human' or 'rgb_array'. Defaults to None.
+        gamestate (str, optional): The game state to start the environment in.
+
+    Attributes:
+        agents (list): List of agent names participating in the game.
+        possible_agents (list): List of all possible agents.
+        agent_name_mapping (dict): Mapping from agent names to numerical IDs.
+        action_spaces (dict): Action spaces for each agent, defined using Gymnasium's spaces.Discrete.
+        observation_spaces (dict): Observation spaces for each agent, defined using Gymnasium's spaces.Dict containing action_mask and observation.
+        game_board (GameBoard): Represents the state of the game board.
+        game_rules (GameRules): Governs valid moves for players to execute on the game board.
+        players (list): List of Player objects, each representing an agent in the game.
+        game_manager (GameManager): Handles the game state updates and agent actions.
+        console (Console): Manages logging of game events and debugging information.
+        gamestate (str): The current game state, either 'normal_phase' or 'settle_phase'.
+        render_mode (str): The mode in which to render the environment ('human', 'rgb_array' or None).
+        _agent_selector(agent_selector): Internal selector for managing agents turn orders.
+        terminations (dict): Flags to indicate if each agent has reached a terminal state.
+        truncations (dict): Flags to indicate if each agent has reached a truncation state.
+        rewards (dict): Rewards assigned to each agent at the end of each step.
+        _cumulative_rewards (dict): Cumulative rewards assigned to each agent over a episode.
+        infos (dict): Additional information about the environment state, such as seed.
+        pass_action_index (int): Index of the pass action in the action space.
+        roll_dice_action_index (int): Index of the roll dice action in the action space.
+        step_count (int): Counter for the number of steps taken in the environment.
+        was_placement_successful (bool): Flag to indicate if the action of placeing the last piece was successful.
+        vertices_list (list): List of all vertices (nodes) on the game board.
+        edges_list (list): List of all edges on the game board.
+        screen_width (int): Width of the Pygame window for rendering the game state.
+        screen_height (int): Height of the Pygame window for rendering the game state.
+        
+    Methods:
+        reset(seed=None, return_info=False, options=False):
+            Resets the environment to an initial state.
+        step(action):
+            Advances the environment by one step using the given action.
+        observe(agent):
+            Returns the current observation for the specified agent.
+        get_action_mask(agent):
+            Returns the action mask for the specified agent.
+        get_board_state():
+            Returns the current state of the game board.
+            - Vertex states: 2 values for house and city, 0 if empty
+            - Edge states: 1 value for road, 0 if empty
+            - Tile states: 6 values for resources and  1 for number (7 total), 0 if empty
+        get_player_state(agent):
+            Returns the current state of the specified player.
+            - Resources: 5 values for each resource, normalized to a range [0, 1]
+            - Remaining pieces: 3 values, one for each piece, normalized to a range [0, 1]
+            - Victory points: 1 value, normalized to a range [0, 1]
+        get_enemy_state(agent):
+            Returns the current state of the other players.
+            - Total resources: 1 value for each enemy, normalized to a range [0, 1]
+            - Victory points: 1 value for each enemy, normalized to a range [0, 1]
+        get_victory_points():
+            Returns the current victory points for each player.
+        render():
+            Renders the current game state.
+        close():
+            Closes rendered game state, and releases any resources.
+            
+    Configurations:
+        The environment has two game-spesific configurations:
+            Set the game state as an argument when initializing the environment:
+            1. 'normal_phase' - Run the environment only in normal_phase, with a loaded board state.
+            2. 'settle_phase' - Run the environment with both settle_phase and normal_phase.
+        
+        The environment can be rendered in two modes:
+            Set the render mode as an argument when initializing the environment:
+            1. 'human' - Renders the game state in a Pygame window.
+            2. 'rgb_array' - Returns the game state as an RGB array.
+        
+            
+    '''
+    metadata = {'render.modes': ['human', 'rgb_array'], 'gamestate': ['settle_phase', 'normal_phase'], 'name': 'catan_v0'}
+    
+    def __init__(self, render_mode=None, gamestate='normal_phase'):
         super().__init__()
         self.render_mode = render_mode
+        self.gamestate = gamestate
         if self.render_mode == "human" or self.render_mode == "rgb_array":
             pygame.init()
             self.screen_width = 1400
@@ -63,10 +144,10 @@ class CatanEnv(AECEnv):
         self.game_board.set_screen_dimensions(1400, 700)
         self.game_rules = GameRules(self.game_board)
         self.players = [
-            Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2), # Red player
-            Player(player_id=1, color=(0, 0, 255), settlements=3, roads=13, cities=4, victory_points=2), # Blue player
-            Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2), # Green player
-            Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2) # Orange player
+            Player(player_id=0, color=(255, 0, 0), settlements=5, roads=13, cities=4, victory_points=0), # Red player
+            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=13, cities=4, victory_points=0), # Blue player
+            Player(player_id=2, color=(20, 220, 20), settlements=5, roads=13, cities=4, victory_points=0), # Green player
+            Player(player_id=3, color=(255, 165, 0), settlements=5, roads=13, cities=4, victory_points=0) # Orange player
         ]
         
         if render_mode == "human":
@@ -105,7 +186,7 @@ class CatanEnv(AECEnv):
             for agent in self.agents   
         }
                 
-        self.game_manager.gamestate = 'normal_phase'
+        self.game_manager.gamestate = self.gamestate
         
         self.pass_action_index = 0
         self.roll_dice_action_index = 1
@@ -150,7 +231,6 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self._agent_selector = agent_selector(self.possible_agents)
         self.agent_selection = self.agents[0]
         
         # reset game state dictionaries
@@ -166,16 +246,34 @@ class CatanEnv(AECEnv):
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
 
         # reset game components
-        self.game_board = self.load_random_board_normal_phase()
-        self.game_board.set_screen_dimensions(1400, 700)
-        self.game_rules = GameRules(self.game_board)
-        self.players = [
-            Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2), # Red player
-            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=13, cities=4, victory_points=2), # Blue player
-            Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2), # Green player
-            Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2) # Orange player
-        ]
-        
+        if self.gamestate == 'normal_phase':
+            self._agent_selector = agent_selector(self.possible_agents)
+            self.game_board = self.load_random_board_normal_phase()
+            self.players = [
+            Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2, 
+                   resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Red player
+            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=13, cities=4, victory_points=2,
+                   resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Blue player
+            Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2,
+                   resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Green player
+            Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2,
+                   resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}) # Orange player
+            ]
+        # Settle phase
+        else:
+            self._agent_selector = CustomAgentSelector(self.starting_agents)
+            self.game_board.generate_board(board_radius=2)
+            self.players = [
+            Player(player_id=0, color=(255, 0, 0), settlements=5, roads=15, cities=4, victory_points=0, 
+                   resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}), # Red player
+            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=15, cities=4, victory_points=0,
+                   resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}), # Blue player
+            Player(player_id=2, color=(20, 220, 20), settlements=5, roads=15, cities=4, victory_points=0,
+                   resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}), # Green player
+            Player(player_id=3, color=(255, 165, 0), settlements=5, roads=15, cities=4, victory_points=0,
+                   resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}) # Orange player
+            ]
+
         player_id_map = {player.player_id: player for player in self.players}
         
         for vertex in self.game_board.vertices.values():
@@ -192,9 +290,9 @@ class CatanEnv(AECEnv):
                 
         # reset game manager and generate new board
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
-        self.game_manager.gamestate = 'normal_phase'
+        self.game_manager.gamestate = self.gamestate
         self.game_manager.dice_rolled = False
-        #self.game_board.generate_board(board_radius=2)
+        # uncomment to generate a new board
         
         print(f"Players in player_id_map: {list(player_id_map.keys())}")
         houses_with_settle_bonus = {player.player_id: False for player in self.players}
@@ -224,6 +322,7 @@ class CatanEnv(AECEnv):
         return obs
     
     def load_random_board_normal_phase(self):
+        # Load a random board from the saved boards directory
         board_files = os.listdir('normal_phase_boards')
         if not board_files:
             raise Exception("No saved boards found in 'saved_boards' directory")
@@ -243,7 +342,7 @@ class CatanEnv(AECEnv):
         observation = np.concatenate([board_state, player_state, enemy_state])
         
         
-        # takes a dictionary of observations for each agent
+        # Return observation and mask as a dictionary
         observation_dict = {
             "action_mask": action_mask,
             "observation": observation
@@ -259,13 +358,14 @@ class CatanEnv(AECEnv):
         return observation_dict
     
     def get_action_mask(self, agent):
+        # Get valid actions for the current agent
         valid_actions = self.get_valid_actions(agent)
         action_mask = np.zeros(self.calculate_action_space_size(), dtype=np.int8)
         action_mask[valid_actions] = 1.0
         return action_mask
     
     def get_board_state(self):
-        
+        # Vertex states: 2 values for house and city, 0 if empty
         vertex_states = []
         for vertex in self.game_board.vertices.values():
             if vertex.house:
@@ -277,7 +377,8 @@ class CatanEnv(AECEnv):
             vertex_states.append(vertex_state)
         # vertex_states should be number of vertices x 2
         vertex_states = np.array(vertex_states).flatten()
-                
+        
+        # Edge states: 1 value for road, 0 if empty
         edge_states = []
         for edge in self.game_board.edges.values():
             if edge.road:
@@ -288,6 +389,7 @@ class CatanEnv(AECEnv):
         # edge_states should be number of edges x 1
         edge_states = np.array(edge_states).flatten()
         
+        # Tile states: 6 values for resources and  1 for number (7 total), 0 if empty
         tile_states = []
         resource_to_idx = {'wood': 0, 'brick': 1, 'sheep': 2, 'wheat': 3, 'ore': 4, 'desert': 5}
         for tile in self.game_board.tiles.values():
@@ -310,6 +412,7 @@ class CatanEnv(AECEnv):
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         
+        # Normalize resources to a range [0, 1]
         resources = np.array([
             player.resources['wood'],
             player.resources['brick'],
@@ -319,12 +422,14 @@ class CatanEnv(AECEnv):
         ], dtype=np.float32)
         resources /= 25
         
+        # Normalize remaining pieces to a range [0, 1]
         remaining_pieces = np.array([
             player.settlements / 5,
             player.roads / 15,
             player.cities / 4
         ], dtype=np.float32)
         
+        # Normalize victory points to a range [0, 1]
         victory_points = np.array([player.victory_points / 10], dtype=np.float32)
         # player_state should be 5 resources + 3 remaining pieces + 1 victory point
         player_state = np.concatenate([resources, remaining_pieces, victory_points])
@@ -354,6 +459,7 @@ class CatanEnv(AECEnv):
         self.step_count += 1
         self.console.log(f"step_{self.step_count}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
         
+        # Set the current agent and player
         agent = self.agent_selection
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
@@ -364,22 +470,26 @@ class CatanEnv(AECEnv):
             self._was_dead_step(action)
             return
         
+        # Get all valid actions for the current agent, and check if the action is valid
         valid_actions = self.get_valid_actions(agent)
         self.console.log(f"step_Valid actions: {valid_actions}")
         if action not in valid_actions:
-            # Action is invalid, agent terminated
+            # Action is invalid, terminate agent
             self.rewards[agent] = -2.0
             self.terminations[agent] = True
             self.console.log(f"step_Invalid action: {action}, terminated.")
             self._was_dead_step(action)
             return
         else:
+            # Decode action into game-spesific command and handle it
             action_type, action_param = self.decode_action(action)
             self.was_placement_successful = self.game_manager.handle_action(action_type, action_param)
 
+            # Update rewards for actions done this step
             self.rewards[agent] = self.calculate_reward(agent, action_type)
             self.console.log(f"Agent {agent} executed action {action_type}, reward: {self.rewards[agent]}")
         
+        # Check if the game has ended
         game_over = self.game_manager.check_if_game_ended()
         if game_over:
             for ag in self.agents:
@@ -398,6 +508,7 @@ class CatanEnv(AECEnv):
             elif self.game_manager.starting_sub_phase == 'house' and self.game_manager.has_placed_piece:
                 self.agent_selection = self._agent_selector.next()
                   
+            # If the settle_phase is over, the next agent should be the same as the current one
             if self._agent_selector.is_last():
                 self._agent_selector = agent_selector(self.agents)
                 self.agent_selection = self.agents[0]
@@ -413,6 +524,7 @@ class CatanEnv(AECEnv):
                 self.agent_selection = agent
         
         try:
+            # Accumulate rewards at the end of the step
             self._accumulate_rewards()
             
             if self.render_mode == "human":
@@ -565,7 +677,9 @@ class CatanEnv(AECEnv):
             text_surface = text_font.render(text, True, player.color)
             self.screen.blit(text_surface, (10, y_offset))
             y_offset += 20
-
+            
+        if self.render_mode == "human":
+            self.console.draw(self.screen)
         
     def load_resources(self):
         if self.render_mode == "human" or self.render_mode == "rgb_array":
