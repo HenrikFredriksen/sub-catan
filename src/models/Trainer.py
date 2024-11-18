@@ -45,8 +45,10 @@ def pretrain_settlement_phase():
     writer.close()
     return ppo
 
-def train_normal_phase_loaded_board():
-    env = CatanEnv()
+def train(gamestate='normal_phase'):
+    # Change gamestate 'settle_phase' to run whole game training
+    # Change gamestate 'normal_phase' to run normal phase training with loaded board
+    env = CatanEnv(gamestate=gamestate)
     
     writer = SummaryWriter(log_dir='run_logs/catan_training')
     
@@ -81,7 +83,7 @@ def train_normal_phase_loaded_board():
             print(f"Loaded pretrained model for agent {agent_id}")
 
     # Train the agent
-    n_episodes = 2
+    n_episodes = 5000
     base_seed = 42
     rewards = ppo.train(n_episodes, seed=base_seed, max_turns_without_building=2000)
     
