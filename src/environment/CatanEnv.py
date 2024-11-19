@@ -258,7 +258,7 @@ class CatanEnv(AECEnv):
             self.players = [
             Player(player_id=0, color=(255, 0, 0), settlements=3, roads=13, cities=4, victory_points=2, 
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Red player
-            Player(player_id=1, color=(0, 0, 255), settlements=5, roads=13, cities=4, victory_points=2,
+            Player(player_id=1, color=(0, 0, 255), settlements=3, roads=13, cities=4, victory_points=2,
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Blue player
             Player(player_id=2, color=(20, 220, 20), settlements=3, roads=13, cities=4, victory_points=2,
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}), # Green player
