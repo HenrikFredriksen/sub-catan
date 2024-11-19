@@ -358,19 +358,19 @@ class MultiAgentPPO:
             while not all(done.values()):
                 agent_id = self.env.agent_selection
                 
-                current_building_count = sum(p.settlements + p.cities for p in self.env.players)
-                if current_building_count > last_building_count:
-                    turns_without_building = 0
-                    last_building_count = current_building_count
-                else:
-                    turns_without_building += 1
+                #current_building_count = sum(p.settlements + p.cities for p in self.env.players)
+                #if current_building_count > last_building_count:
+                #    turns_without_building = 0
+                #    last_building_count = current_building_count
+                #else:
+                #    turns_without_building += 1
                     
-                if turns_without_building > max_turns_without_building:
-                    print("Ending episode due to no building for too long")
-                    for ag in self.env.agents:
-                        episode_reward[ag] = -10
-                        done[ag] = True
-                    break
+                #if turns_without_building > max_turns_without_building:
+                #    print("Ending episode due to no building for too long")
+                #    for ag in self.env.agents:
+                #        episode_reward[ag] = -10
+                #        done[ag] = True
+                #    break
 
                 done[agent_id] = (
                 self.env.terminations.get(agent_id, False) or 

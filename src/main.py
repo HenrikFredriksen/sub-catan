@@ -29,11 +29,11 @@ if __name__ == "__main__":
     
     # Change gamestate 'settle_phase' to run whole game training
     # Change gamestate 'normal_phase' to run normal phase training with loaded board
-    #train(n_episodes=1) # Train models in normal phase of the game with a loaded board state
+    train(n_episodes=5000) # Train models in normal phase of the game with a loaded board state
     
 
     # render_mode = 'rgb_array' or 'human'
     # gamestate = 'normal_phase' or 'settle_phase'
-    num_evals = 3
-    for _ in range(num_evals):
-        eval_trained_agents(render_mode='human', gamestate='normal_phase') # Evaluate the trained agents
+    #num_evals = 3
+    #for _ in range(num_evals):
+    #    eval_trained_agents(render_mode='human', gamestate='normal_phase') # Evaluate the trained agents

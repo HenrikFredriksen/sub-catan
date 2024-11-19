@@ -45,7 +45,7 @@ def pretrain_settlement_phase():
     writer.close()
     return ppo
 
-def train(gamestate='normal_phase', n_episodes=2500):
+def train(gamestate='normal_phase', n_episodes=5000):
     # Change gamestate 'settle_phase' to run whole game training
     # Change gamestate 'normal_phase' to run normal phase training with loaded board
     env = CatanEnv(gamestate=gamestate)
