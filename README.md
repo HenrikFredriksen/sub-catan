@@ -82,6 +82,7 @@ train models, pretrain settlement phase, and evaluating trained agents
 - `models/`: Contains models and training scripts
     - `Trainer.py`: Conatins training routines for agents.
     - `Evaluator.py`: Functions to evaluate trained agents.
+    - `test_catan_env_random_action.py`: Tests the environment by taking random actions
 - `assets/`: Contains utility classes.
     - `Console.py` / `PrintConsole.py`: Utilities for logging and printing game events.
 - `gameloop/`: Contains the game loop for playtesting the game yourself.
@@ -94,9 +95,10 @@ There is currently 4 configurations in the main.py to entry different scripts of
 
 ### Running configurations
 1. Playtest the game yourself: Uncomment GameLoop().main()
-2. Pretrain agents in settlephase only: Uncomment pretrain_settlement_phase()
-3. Train agents in either normal phase or whole game (look in main.py documentation for instructions)
-4. Evaluate trained agents in either normal phase or whole game.
+2. Test the environment by sending action mask, and taking random action.
+3. Pretrain agents in settlephase only: Uncomment pretrain_settlement_phase()
+4. Train agents in either normal phase or whole game (look in main.py documentation for instructions)
+5. Evaluate trained agents in either normal phase or whole game.
 
 ### Monitor training
 Training logs and metrics are saved using TensorBoard. 
