@@ -1,3 +1,10 @@
+'''
+The Vertex class represents a vertex on the game board.
+The vertex has a position, and a list of neighbors.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class Vertex:
     def __init__(self, position):
         self.position = position

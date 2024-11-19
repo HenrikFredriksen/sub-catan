@@ -1,4 +1,10 @@
+'''
+The HexCoordinate class is a class that represents a hexagonal coordinate in a hex grid.
+It has a column (q) and a row (r) attribute, and methods for getting neighbors and calculating distance.
 
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class HexCoordinate:
     def __init__(self, q, r):
         self.q = q # column

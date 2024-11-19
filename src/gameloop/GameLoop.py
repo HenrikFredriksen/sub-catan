@@ -8,6 +8,13 @@ from game.Player import Player
 from assets.Button import Button
 from assets.Console import Console
 
+'''
+The GameLoop class is the loop that runs the game for users to interact with.
+It initializes the game board, players, and game manager.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class GameLoop:
     def __init__(self):
         self.tile_images = {}

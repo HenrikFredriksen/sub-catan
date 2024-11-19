@@ -4,7 +4,16 @@ import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
 
+'''
+This file contains the classes and functions for the MultiAgentPPO model implementation.
+The MultiAgentPPO class is used to train multiple agents using the Proximal Policy Optimization (PPO) algorithm.
+The PPONetwork class is the neural network model used by the agents to learn and make decisions.
+The PPOMemory class is used to store experiences and sample batches for training.
+The get_policy_network function is used to create the policy network for each agent, adding support for different policy types.
 
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class PPONetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(PPONetwork, self).__init__()

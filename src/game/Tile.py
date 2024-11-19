@@ -1,6 +1,13 @@
 import os
 import pygame
 
+'''
+The Tile class represents a tile on the game board.
+The tile has a resource, a number, and a position.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class Tile:
     def __init__(self, resource, number, position):
         self.resource = resource

@@ -6,7 +6,18 @@ from src.models.MultiAgentPPOImpl import MultiAgentPPO
 from environment.CatanEnv import CatanEnv
 from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv 
 
-def pretrain_settlement_phase():
+'''
+This file contains the training scripts for training agents in different phases of the game.
+
+train_settlement_phase() - Train agents in the settlement phase of the game
+train() - Train agents in either the normal phase or the whole game
+
+Both scripts support multiple policies for different agents.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
+def train_settlement_phase():
     writer = SummaryWriter(log_dir='run_logs/catan_settle_pretraining')
     env = CatanSettlePhaseEnv(writer=writer)
     writer = SummaryWriter(log_dir='run_logs/catan_settle_pretraining')

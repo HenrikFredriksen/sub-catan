@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.Evaluator import eval_trained_agents
-from models.Trainer import train, pretrain_settlement_phase
+from models.Trainer import train, train_settlement_phase
 from gameloop.GameLoop import GameLoop
 from models.test_catan_env_random_action import test_environment
 
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     train() - Train models, takes optional argument: 
         - gamestate='normal_phase' or 'settle_phase'
         
-    pretrain_settlement_phase() - Train models only in settle phase of the game
+    train_settlement_phase() - Train models only in settle phase of the game
     
     eval_trained_agents() - Evaluate the trained agents, takes optional arguments: 
         - render_mode='rgb_array' or 'human'
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     
     #GameLoop().main()
     
-    #pretrain_settlement_phase()
+    #train_settlement_phase()
     
     #test_environment()
     

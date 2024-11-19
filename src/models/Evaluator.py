@@ -6,7 +6,12 @@ import imageio
 
 from .MultiAgentPPOImpl import MultiAgentPPO
 from environment.CatanEnv import CatanEnv
+'''
+Contains the evaluation script for evaluating trained agents in the Catan environment.
 
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 def eval_trained_agents(render_mode='human', gamestate='normal_phase'):
     os.makedirs("game_frames", exist_ok=True)
     env = CatanEnv(render_mode=render_mode, gamestate=gamestate)

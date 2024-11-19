@@ -3,6 +3,14 @@ from game.City import City
 from game.Road import Road
 import numpy as np
 
+'''
+This class is responsible for managing the game state and rules
+of the game Catan. It usecase stems in handling logic when you 
+interact with the game logic in the GameLoop class.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class GameManager:
     def __init__(self, game_board, game_rules, players, console):
         self.turn = 0
