@@ -638,14 +638,11 @@ class CatanEnv(AECEnv):
             return 1.0
         if self.was_placement_successful:
             if action_type == 'place_house':
-                vertex = self.game_manager.last_placed_house_vertex.get(self.agent_selection)
+                player = self.game_manager.current_player
+                vertex = self.game_manager.last_placed_house_vertex.get(player)
                 if vertex:
-                    adj_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
-                    reward += len(adj_tiles) * 2
-
-                    resources = self.game_board.get_resources_adj_to_vertex(vertex)
-                    unique_resources = set(resources.keys()) - {'desert'}
-                    reward += len(unique_resources) * 3
+                    settlement_adjacency_bonus = self.calculate_settlement_adjacency_reward(vertex, player)
+                    reward += settlement_adjacency_bonus
                 return reward
             elif action_type == 'place_city':
                 return 6
@@ -655,6 +652,37 @@ class CatanEnv(AECEnv):
                 return -1.1
         else:
             return -1.0
+        
+    def calculate_settlement_adjacency_reward(self, settle_vertex, player):
+        dice_probabilities = {2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1}
+        max_dice_weight = max(dice_probabilities.values())
+
+        exsisting_resources, exsisting_numbers = self.game_manager.get_player_adj_resources_and_numbers(player, settle_vertex)
+        
+        adj_tiles = self.game_board.get_tiles_adj_to_vertex(settle_vertex)
+        total_bonus = 0
+
+        for tile in adj_tiles:
+            resource = tile.resource
+            number = tile.number
+
+            if resource == 'desert':
+                continue
+
+            dice_weight = dice_probabilities.get(number, 0)
+
+            resource_weight = 1.5 if resource not in exsisting_resources else 1.0
+
+            number_weight = 1.2 if number not in exsisting_numbers else 1.0
+
+            # Max bonus per tile would be 9 (5 * 1.5 * 1.2)
+            total_bonus += dice_weight * resource_weight * number_weight
+
+        max_possible_bonus = max_dice_weight * 1.5 * 1.2
+        normalized_bonus = total_bonus / max_possible_bonus
+        if normalized_bonus > 0.6:
+            self.console.log(f"{player.get_color()} did a good settlement placement, normalized bonus: {normalized_bonus}")
+        return total_bonus
     
     def render(self):
         if not self.is_open:

@@ -160,6 +160,18 @@ class GameManager:
             vertex.house.player.add_resource(tile.resource, 1)
             self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource} from settlement bonus")
                 
+    def get_player_adj_resources_and_numbers(self, player, settlement_vertex=None):
+        resources = set()
+        numbers = set()
+        for vertex in self.game_board.vertices.values():
+            if vertex.house and vertex.house.player == player and vertex != settlement_vertex:
+                adj_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
+                for tile in adj_tiles:
+                    if tile.resource != 'desert':
+                        resources.add(tile.resource)
+                        numbers.add(tile.number)
+        return resources, numbers
+    
     def handle_action(self, action_type, action_params):
         print(f"Action: {action_type}, {action_params} sent from step")
         if action_type == 'place_house':
