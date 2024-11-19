@@ -1,4 +1,3 @@
-import os
 from game.HexCoordinate import HexCoordinate
 from game.Tile import Tile
 from game.Vertex import Vertex
@@ -6,6 +5,56 @@ from game.Edge import Edge
 import pygame
 import numpy as np
 
+'''
+The GameBoard class represents the playing board of Catan. This class handles the management of tiles, vertices and edges, and the conversion between hexagonal
+coordinates and pixel coordinates. It provides methods for generating the board, 
+drawing game state, and interacting with the board.
+
+Args:
+tile_images (dict): A dictionary mapping resource names to pygame images.
+number_images (dict): A dictionary mapping numbers to pygame images.
+screen_width (int): The width of the window.
+screen_height (int): The height of the window.
+
+Attributes:
+screen_width (int): The width of the window.
+screen_height (int): The height of the window.
+hex_size (int): The size of each hex tile.
+tiles (dict): A dictionary mapping hex coordinates to Tile objects.
+vertices (dict): A dictionary mapping pixel coordinates to Vertex objects.
+edges (dict): A dictionary mapping pairs of Vertex objects to Edge objects.
+tile_width (int): The width of a hex tile.
+tile_height (int): The height of a hex tile.
+tile_images (dict): A dictionary mapping resource names to pygame images.
+number_images (dict): A dictionary mapping numbers to pygame images.
+
+Methods:
+clean_for_serialization(): Removes the tile_images and number_images attributes from the object.
+add_tile(resource, number, q, r): Adds a tile to the board at the given hex coordinates.
+get_tile(q, r): Returns the tile at the given hex coordinates.
+get_neighboring_tiles(q, r): Returns a list of neighboring tiles to the tile at the given hex coordinates.
+hex_to_pixel(hex_coord): Converts hex coordinates to pixel coordinates.
+pixel_to_hex(x, y): Converts pixel coordinates to hex coordinates.
+get_hex_corners(hex_coord): Returns the pixel coordinates of the corners of a hex tile.
+get_tile_vertices(tile): Returns the vertices of a tile.
+get_tiles_adj_to_vertex(vertex): Returns the tiles adjacent to a vertex.
+get_resources_adj_to_vertex(vertex): Returns the resource types of tiles adjacent to a vertex.
+get_numbers_adj_to_vertex(vertex): Returns the numbers on tiles adjacent to a vertex.
+draw_grid(screen): Draws the hex grid on the screen.
+draw_vertices(screen, highlighted_vertices): Draws the vertices on the screen, used for drawing house and city.
+draw_edges(screen, highlighted_edges): Draws the edges on the screen, used for drawing roads.
+draw_game_loop(screen, highlighted_vertices, highlighted_edges): Draws the game state on the screen.
+draw(screen): Draws the all the board elements on the screen.
+generate_vertices(): Generates the vertices based on the tiles.
+generate_edges(): Generates the edges based on the vertices.
+set_screen_dimensions(width, height): Sets the screen dimensions.
+generate_board(board_radius): Generates a random board with the given radius.
+find_nearest_vertex(mouse_pos, proximity_radius): Finds the nearest vertex to the given mouse position.
+find_nearest_edge(mouse_pos, proximity_radius): Finds the nearest edge to the given mouse position.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class GameBoard:
     def __init__(self, tile_images=None, number_images=None, screen_width=1400, screen_height=700):
         self.screen_width = screen_width

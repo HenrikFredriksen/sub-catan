@@ -1,17 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from torch.distributions import Categorical
-from collections import deque
-import time
-import os
-import traceback
-import imageio
 
-from environment.CatanEnv import CatanEnv
-from environment.CatanSettlePhaseEnv import CatanSettlePhaseEnv
 
 class PPONetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):

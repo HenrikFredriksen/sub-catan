@@ -3,6 +3,68 @@ from game.City import City
 from game.Road import Road
 import numpy as np
 
+'''
+The gamemanger class oversees the progression of the game, managing player turns,
+handling actions, updating the game state and enforcing game rules. It interacts closely
+with the game board, players, and game rules classes to manage the game state.
+It also has its own console to log game events and actions.
+
+Args:
+game_board (GameBoard): The game board containing all game elements, excluding player spesific information.
+game_rules (GameRules): The game rules class that governs the rules of the game.
+players (list): A list of player objects representing the players in the game.
+console (Console): A console object to log game events and actions.
+
+Attributes:
+turn (int): The current turn number of the game.
+max_turns (int): The maximum number of turns before the game ends.
+game_board (GameBoard): Reference to the game board object.
+game_rules (GameRules): Reference to the game rules object.
+players (list): A list of players in the game.
+console (Console): Reference to the console object.
+current_player_index (int): The index of the current player in the players list.
+current_player (Player): Reference to the current player object.
+has_placed_piece (bool): Flag to indicate if the current player has placed a piece this turn.
+player_passed_turn (bool): Flag to indicate if the current player has passed their turn.
+dice_rolled (bool): Flag to indicate if the dice has been rolled this turn.
+game_over (bool): Flag to indicate if the game is over.
+gamestate (str): The current state of the game, either 'settle_phase' or 'normal_phase'.
+starting_sub_phase (str): The current sub-phase of the starting phase, either 'house' or 'road'.
+phase_transition (bool): Flag to indicate if the game is transitioning between phases.
+game_ended_by_victory_points (bool): Flag to indicate if the game ended due to a player reaching 10 victory points.
+starting_phase_players_stack (list): A list of players in the starting phase, used to determine turn order.
+settlement_count (dict): A dictionary to keep track of the number of settlements placed by each player.
+highlighted_vertecies (list): A list of highlighted vertices for valid house and city placements.
+highlighted_edges (list): A list of highlighted edges for valid road placements.
+last_placed_house_vertex (dict): A dictionary to keep track of the last placed house vertex for each player.
+last_placed_road_edge (dict): A dictionary to keep track of the last placed road edge for each player.
+
+Methods:
+roll_phase(): Rolls the dice and collects resources for the current player.
+robber(): Simple implementation of the robber taking resources from players with more than a given amount of resources.
+is_turn_over(): Checks if the current player's turn is over.
+pass_turn(): Passes the current player's turn.
+check_if_game_ended(): Checks if the game has ended based on victory points or max turns.
+change_player(): Changes the current player to the next player in the list.
+roll_dice(): Rolls two dice and returns the sum of the two values.
+trade_with_bank(trade_in_resource, get_back_resource): Trades resources with the bank at a 4:1 ratio.
+check_tile_resources(roll): Checks the resources of the tiles based on the dice roll and collects resources for the players.
+settlement_bonus(vertex): Gives the player resources based on the settlement bonus.
+get_player_adj_resources_and_numbers(player, settlement_vertex=None): Gets the resource type and numbers of adjacent tiles for a player.
+handle_action(action_type, action_params): Handles the action sent from the agent and updates the game state accordingly.
+place_house(vertex): Places a house on the given vertex for the current player.
+place_city(vertex): Places a city on the given vertex for the current player.
+place_road(edge): Places a road on the given edge for the current player.
+find_available_house__and_city_locations(): Finds the available vertices for house and city placements.
+find_available_road_locations(): Finds the available edges for road placements.
+remove_highlighted_locations(): Removes the highlighted vertices and edges.
+simulate_settle_phase(): Simulates the settle phase of the game for the agents
+simulate_place_house(vertex): method to place a house without needing player resources
+simulate_place_road(edge): method to place a road without needing player resources
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class GameManager:
     def __init__(self, game_board, game_rules, players, console):
         self.turn = 0

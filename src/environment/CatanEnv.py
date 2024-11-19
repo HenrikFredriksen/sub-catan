@@ -108,7 +108,8 @@ class CatanEnv(AECEnv):
             1. 'human' - Renders the game state in a Pygame window.
             2. 'rgb_array' - Returns the game state as an RGB array.
         
-            
+    @Author: Henrik Tobias Fredriksen
+    @date: 19. October 2024
     '''
     metadata = {'render.modes': ['human', 'rgb_array'], 'gamestate': ['settle_phase', 'normal_phase'], 'name': 'catan_v0'}
     
@@ -192,6 +193,8 @@ class CatanEnv(AECEnv):
         self.pass_action_index = 0
         self.roll_dice_action_index = 1
         self.step_count = 0
+        
+        #FLAGS
         self.was_placement_successful = False
         
     def observation_space(self, agent):

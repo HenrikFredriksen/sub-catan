@@ -1,4 +1,23 @@
+'''
+The GameRules class is responsible for checking if a move is valid or not, according
+to the rules of Catan. It ensures that moves such as placing a house, road, or city
+are valid. 
 
+Args:
+game_board (GameBoard): The game board object that the game rules will be applied to.
+
+Attributes:
+game_board (GameBoard): Reference to the game board for accessing board elements.
+
+Methods:
+is_valid_house_placement: Check if a house can be placed on a vertex.
+is_valid_road_placement: Check if a road can be placed on an edge.
+starting_settlement_bonus: Check if a vertex has a house.
+is_valid_city_placement: Check if a city can be placed on a vertex.
+
+@Author: Henrik Tobias Fredriksen
+@Date: 19. October 2024
+'''
 class GameRules:
     def __init__(self, game_board):
         self.game_board = game_board
