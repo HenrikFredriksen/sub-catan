@@ -452,7 +452,8 @@ class GameManager:
                 return False
         
         for player in players:
-            unique_resources = {resource for resource in player_resources[player] if (resource != 'desert' or resource != 'mountain')}
+            unique_resources = {resource for resource in player_resources[player] if (resource != 'desert' and resource != 'ore')}
+            print(f'player {player.get_color()} has {unique_resources}')
             if len(unique_resources) < 4:
                 console.log(f"{player.get_color()} has less than 4 unique resources")
                 return False
