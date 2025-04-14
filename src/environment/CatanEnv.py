@@ -113,8 +113,9 @@ class CatanEnv(AECEnv):
     '''
     metadata = {'render.modes': ['human', 'rgb_array'], 'gamestate': ['settle_phase', 'normal_phase'], 'name': 'catan_v0'}
     
-    def __init__(self, render_mode=None, gamestate='normal_phase'):
+    def __init__(self, render_mode=None, gamestate='normal_phase', verbose=False):
         super().__init__()
+        self.verbose = verbose
         self.render_mode = render_mode
         self.gamestate = gamestate
         if self.render_mode == "human" or self.render_mode == "rgb_array":
@@ -469,7 +470,8 @@ class CatanEnv(AECEnv):
         
     def step(self, action):
         self.step_count += 1
-        self.console.log(f"step_{self.step_count}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
+        if self.verbose:
+            self.console.log(f"step_{self.step_count}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
         
         # Set the current agent and player
         agent = self.agent_selection
@@ -484,7 +486,8 @@ class CatanEnv(AECEnv):
         
         # Get all valid actions for the current agent, and check if the action is valid
         valid_actions = self.get_valid_actions(agent)
-        self.console.log(f"step_Valid actions: {valid_actions}")
+        if self.verbose:
+            self.console.log(f"step_Valid actions: {valid_actions}")
         if action not in valid_actions:
             # Action is invalid, terminate agent
             self.rewards[agent] = -2.0
@@ -499,7 +502,8 @@ class CatanEnv(AECEnv):
 
             # Update rewards for actions done this step
             self.rewards[agent] = self.calculate_reward(agent, action_type)
-            self.console.log(f"Agent {agent} executed action {action_type}, reward: {self.rewards[agent]}")
+            if self.verbose:
+                self.console.log(f"Agent {agent} executed action {action_type}, reward: {self.rewards[agent]}")
         
         # Check if the game has ended
         game_over = self.game_manager.check_if_game_ended()
@@ -508,8 +512,10 @@ class CatanEnv(AECEnv):
                 self.terminations[ag] = True
                 self.rewards[ag] += 20 if self.game_manager.game_ended_by_victory_points else 0
             self.infos[agent]['reason'] = 'Victory'
-            self.console.log(f"step_Game Over!")
-            self.console.log(f"step_Terminating all agents: {self.terminations}")
+
+            if self.verbose:
+                self.console.log(f"step_Game Over!")
+                self.console.log(f"step_Terminating all agents: {self.terminations}")
 
         # Settle phase
         if self.game_manager.gamestate == 'settle_phase':
@@ -525,7 +531,8 @@ class CatanEnv(AECEnv):
                 self._agent_selector = agent_selector(self.agents)
                 self.agent_selection = self.agents[0]
                 self.game_manager.gamestate = 'normal_phase'
-                self.console.log(f"step_Phase transition to normal phase")
+                if self.verbose:
+                    self.console.log(f"step_Phase transition to normal phase")
         # Normal phase
         else:
             # If the turn is over, the next agent should be the next one
@@ -549,7 +556,8 @@ class CatanEnv(AECEnv):
             self._accumulate_rewards()
             
     def decode_action(self, action):
-        print(f"Decoding action: {action}")
+        if self.verbose:
+            print(f"Decoding action: {action}")
         num_vertices = len(self.vertices_list)
         
         if action == self.pass_action_index:
@@ -684,7 +692,8 @@ class CatanEnv(AECEnv):
         max_possible_bonus = max_dice_weight * 1.5 * 1.2
         normalized_bonus = total_bonus / max_possible_bonus
         if normalized_bonus > 0.6:
-            self.console.log(f"{player.get_color()} did a good settlement placement, normalized bonus: {normalized_bonus}")
+            if self.verbose:
+                self.console.log(f"{player.get_color()} did a good settlement placement, normalized bonus: {normalized_bonus}")
         return total_bonus
     
     def render(self):

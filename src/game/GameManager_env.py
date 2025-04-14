@@ -66,7 +66,8 @@ simulate_place_road(edge): method to place a road without needing player resourc
 @Date: 19. October 2024
 '''
 class GameManager:
-    def __init__(self, game_board, game_rules, players, console):
+    def __init__(self, game_board, game_rules, players, console, verbose=False):
+        self.verbose = verbose
         self.turn = 0
         self.max_turns = 1000
         self.game_board = game_board
@@ -105,13 +106,16 @@ class GameManager:
             self.dice_rolled = True
             if roll == 7:
                 self.robber()
-                self.console.log("Robber moves")
+                if self.verbose:
+                    self.console.log("Robber moves")
             else:
                 self.check_tile_resources(roll)
-                print(f"Resources collected for roll {roll}")
+                if self.verbose:
+                    print(f"Resources collected for roll {roll}")
         else:
             pass
-            self.console.log("Dice already rolled this turn")
+            if self.verbose:
+                self.console.log("Dice already rolled this turn")
             
     def robber(self):
         for player in self.players:
@@ -128,10 +132,12 @@ class GameManager:
 
                     player.resources[max_key] -= 1                 
                     discard -= 1
-                self.console.log(f"{player.get_color()} had to discard resources (kept {player.resources}), total resources: {total_resources}")
+                if self.verbose:
+                    self.console.log(f"{player.get_color()} had to discard resources (kept {player.resources}), total resources: {total_resources}")
             else:
                 pass
-                self.console.log(f"{player.get_color()} did not have to discard resources, total resources: {total_resources}")
+                if self.verbose:
+                    self.console.log(f"{player.get_color()} did not have to discard resources, total resources: {total_resources}")
             
     def is_turn_over(self):
         if self.player_passed_turn:
@@ -149,16 +155,19 @@ class GameManager:
         self.player_passed_turn = True
         self.dice_rolled = False
         self.turn += 1
-        self.console.log(f"{self.current_player.get_color()} passed their turn")
+        if self.verbose:
+            self.console.log(f"{self.current_player.get_color()} passed their turn")
 
     def check_if_game_ended(self):
         if self.current_player.victory_points >= 10:
-            self.console.log(f"Player {self.current_player.get_color()} won the game with {self.current_player.get_victory_points()}!")
+            if self.verbose:
+                self.console.log(f"Player {self.current_player.get_color()} won the game with {self.current_player.get_victory_points()}!")
             self.game_ended_by_victory_points = True
             self.game_over = True
             return True
         elif self.turn >= self.max_turns:
-            self.console.log("Game over, max turns reached")
+            if self.verbose:
+                self.console.log("Game over, max turns reached")
             self.game_over = True
             return True
         else:
@@ -167,21 +176,25 @@ class GameManager:
                
     def change_player(self):
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
-        print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
+        if self.verbose:
+            print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
         
     def roll_dice(self):
         dice1 = np.random.randint(1, 7)
         dice2 = np.random.randint(1, 7)
-        self.console.log(f"Dice rolled: {dice1}, {dice2}")
+        if self.verbose:
+            self.console.log(f"Dice rolled: {dice1}, {dice2}")
         return dice1 + dice2
     
     def trade_with_bank(self, trade_in_resource, get_back_resource):
         if self.current_player.can_trade_with_bank(trade_in_resource):
             self.current_player.resources[trade_in_resource] -= 4
             self.current_player.resources[get_back_resource] += 1
-            self.console.log(f"{self.current_player.get_color()} traded 4 {trade_in_resource} for 1 {get_back_resource}")
+            if self.verbose:
+                self.console.log(f"{self.current_player.get_color()} traded 4 {trade_in_resource} for 1 {get_back_resource}")
         else:
-            self.console.log(f"{self.current_player.get_color()} does not have enough resources to trade")
+            if self.verbose:
+                self.console.log(f"{self.current_player.get_color()} does not have enough resources to trade")
 
     def check_tile_resources(self, roll):
         for tile in self.game_board.tiles.values():
@@ -191,19 +204,24 @@ class GameManager:
                         player = vertex.house.player
                         if player.resources.get(tile.resource, 0) < 25:
                             player.add_resource(tile.resource, 1)
-                            self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
+                            if self.verbose:
+                                self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
                         else:
-                            print("Player has max resources")
+                            if self.verbose:
+                                print("Player has max resources")
                     elif vertex.city:
                         player = vertex.city.player
                         if player.resources.get(tile.resource, 0) < 24:
                             player.add_resource(tile.resource, 2)
-                            self.console.log(f"{player.get_color()} collected 2 {tile.resource}")
+                            if self.verbose:
+                                self.console.log(f"{player.get_color()} collected 2 {tile.resource}")
                         elif player.resources.get(tile.resource, 0) == 24:
                             player.add_resource(tile.resource, 1)
-                            self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
+                            if self.verbose:
+                                self.console.log(f"{player.get_color()} collected 1 {tile.resource}")
                         else:
-                            print("Player has max resources")
+                            if self.verbose:
+                                print("Player has max resources")
                         
     def settlement_bonus(self, vertex):
         adjacent_tiles = self.game_board.get_tiles_adj_to_vertex(vertex)
@@ -211,7 +229,8 @@ class GameManager:
             if tile.resource == 'desert':
                 continue
             vertex.house.player.add_resource(tile.resource, 1)
-            self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource} from settlement bonus")
+            if self.verbose:
+                self.console.log(f"{vertex.house.player.get_color()} collected 1 {tile.resource} from settlement bonus")
                 
     def get_player_adj_resources_and_numbers(self, player, settlement_vertex=None):
         resources = set()
@@ -226,23 +245,27 @@ class GameManager:
         return resources, numbers
     
     def handle_action(self, action_type, action_params):
-        print(f"Action: {action_type}, {action_params} sent from step")
+        if self.verbose:
+            print(f"Action: {action_type}, {action_params} sent from step")
         if action_type == 'place_house':
             self.place_house(action_params)
             if self.last_placed_house_vertex[self.current_player] != action_params:
-                print(f"House was not placed at {action_params}")
+                if self.verbose:
+                    print(f"House was not placed at {action_params}")
                 return False
             return True
         elif action_type == 'place_city':
             self.place_city(action_params)
             if self.last_placed_house_vertex[self.current_player] != action_params:
-                print(f"City was not placed at {action_params}")
+                if self.verbose:
+                    print(f"City was not placed at {action_params}")
                 return False
             return True
         elif action_type == 'place_road':
             self.place_road(action_params)
             if self.last_placed_road_edge[self.current_player] != action_params:
-                print(f"Road was not placed at {action_params}")
+                if self.verbose:
+                    print(f"Road was not placed at {action_params}")
                 return False
             return True
         elif action_type == 'pass_turn':
@@ -255,7 +278,8 @@ class GameManager:
         elif action_type == 'trade_with_bank':
             self.trade_with_bank(action_params[0], action_params[1])
         else:
-            print(f"Invalid action: {action_type}")
+            if self.verbose:
+                print(f"Invalid action: {action_type}")
             return False
 
     def place_house(self, vertex):
@@ -267,7 +291,8 @@ class GameManager:
             vertex.house = house
             
             self.current_player.victory_points += 1
-            self.console.log(f"{self.current_player.get_color()} built a settlement +1VP, in total {self.current_player.victory_points}VP")
+            if self.verbose:
+                self.console.log(f"{self.current_player.get_color()} built a settlement +1VP, in total {self.current_player.victory_points}VP")
             self.current_player.settlements -= 1
             self.current_player.resources['wood'] -= 1
             self.current_player.resources['brick'] -= 1
@@ -279,7 +304,8 @@ class GameManager:
             #self.find_available_house__and_city_locations()
             
             self.last_placed_house_vertex[self.current_player] = vertex
-            print(f"Settlement built at {vertex.position}")
+            if self.verbose:
+                print(f"Settlement built at {vertex.position}")
             
             if self.gamestate == 'settle_phase':
                 self.has_placed_piece = True
@@ -293,7 +319,8 @@ class GameManager:
                 
                 self.player_passed_turn = True
         else:
-            print(f"Invalid House placement:\n" +
+            if self.verbose:
+                print(f"Invalid House placement:\n" +
                   f"Player has resources? {self.current_player.can_build_settlement()}\n" + 
                   f"House already placed? {vertex.house}")
 
@@ -314,10 +341,13 @@ class GameManager:
             
             self.last_placed_house_vertex[self.current_player] = vertex
             
-            self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
-            print(f"City built at {vertex.position}")
+            if self.verbose:
+                self.console.log(f"{self.current_player.get_color()} built a city +1VP, in total {self.current_player.victory_points}VP")
+            if self.verbose:
+                print(f"City built at {vertex.position}")
         else:
-            print(f"Invalid City placement:\n" +
+            if self.verbose:
+                print(f"Invalid City placement:\n" +
                   f"Player has resources? {self.current_player.can_build_city()}\n" +
                   f"City already placed? {vertex.city}")
             
@@ -338,14 +368,16 @@ class GameManager:
             
             self.last_placed_road_edge[self.current_player] = edge
             
-            self.console.log(f"Red placed road at {edge.vertex1.position} - {edge.vertex2.position}")
+            if self.verbose:
+                self.console.log(f"Red placed road at {edge.vertex1.position} - {edge.vertex2.position}")
             
             if self.gamestate == 'settle_phase':
                 self.has_placed_piece = True
                 self.player_passed_turn = True
                 self.starting_sub_phase = 'house'
         else:
-            print(f"Invalid Road placement:\n" +
+            if self.verbose:
+                print(f"Invalid Road placement:\n" +
                   f"Player has resources? {self.current_player.can_build_road()}\n" +
                   f"nRoad already placed? {edge.road}")
         
@@ -444,7 +476,8 @@ class GameManager:
         
         for player in players:
             unique_resources = {resource for resource in player_resources[player] if (resource != 'desert' and resource != 'ore')}
-            print(f'player {player.get_color()} has {unique_resources}')
+            if self.verbose:
+                print(f'player {player.get_color()} has {unique_resources}')
             if len(unique_resources) < 4:
                 console.log(f"{player.get_color()} has less than 4 unique resources")
                 return False
