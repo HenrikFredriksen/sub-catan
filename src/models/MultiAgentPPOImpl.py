@@ -62,12 +62,12 @@ class AlternativeNetwork(nn.Module):
         self.shared_layers = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, int(hidden_dim * 2)),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim * 2, int(hidden_dim * 1.5)),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
+            nn.Linear(int(hidden_dim * 1.5), hidden_dim),
+            nn.ReLU(),
         )
         self.policy_head = nn.Sequential(nn.Linear(hidden_dim, output_dim), nn.Softmax(dim=-1))
         self.value_head = nn.Sequential(nn.Linear(hidden_dim, 1))
@@ -345,6 +345,8 @@ class MultiAgentPPO:
         episode_rewards = []
         
         for episode in range(n_episodes):
+            import time
+            t0 = time.time()
             print(f"Starting episode {episode + 1}")
             
             episode_seed = seed + episode if seed is not None else None
@@ -399,7 +401,7 @@ class MultiAgentPPO:
 
                 # Update rewards and done status
                 reward = self.env.rewards.get(agent_id, 0)
-                print(f"Agent {agent_id} took action {action} and got reward {reward}")
+                #print(f"Agent {agent_id} took action {action} and got reward {reward}")
                 done[agent_id] = self.env.terminations.get(agent_id, False) or self.env.truncations.get(agent_id, False)
                 episode_reward[agent_id] += reward
 
@@ -424,10 +426,13 @@ class MultiAgentPPO:
             avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
             episode_rewards.append(avg_episode_reward)
             
+            self.writer.add_scalar("Total Reward", total_episode_reward, episode)
             self.writer.add_scalar("Average Reward per episode", avg_episode_reward, episode)
+            self.writer.add_scalar("Episode Length", step, episode)
             
             # Check if it's time to learn
             for agent_id in self.env.possible_agents:
+                self.writer.add_scalar(f"Episode reward/Agent {agent_id}", episode_reward[agent_id], episode)
                 if len(self.memories[agent_id].states) > 0:
                     self.learn(agent_id, episode)
                         
@@ -435,11 +440,16 @@ class MultiAgentPPO:
             
             for agent_id in self.env.possible_agents:
                 self.memories[agent_id].clear()
-            
+
+            elapsed_time = time.time() - t0
+                        
             # Print training progress
             if (episode + 1) % 1 == 0:
                 avg_reward = sum(episode_rewards) / len(episode_rewards)
-                print(f"Episode {episode + 1}, Average Reward: {avg_reward:.2f}")
+                print(f"Episode {episode + 1}/{n_episodes}: "
+                      f"Steps: {step}, "
+                      f"Average Reward: {avg_reward:.2f}, " 
+                      f"time={elapsed_time:.2f}s")
                 
                 if avg_reward > best_reward:
                     best_reward = avg_reward

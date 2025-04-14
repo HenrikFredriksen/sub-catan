@@ -5,12 +5,20 @@ import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.Evaluator import eval_trained_agents
-from models.Trainer import train, train_settlement_phase
+from models import Trainer
 from gameloop.GameLoop import GameLoop
 from models.test_catan_env_random_action import test_environment
+from config import get_default_config, parse_config_file
 
 def argparser():
     parser = argparse.ArgumentParser(description="Train Catan agents")
+    parser.add_argument(
+        "-f",
+        "--config_file",
+        default=None,
+        type=str,
+        help="Path to the config file for training",
+    )
     parser.add_argument(
         "--train_settle_phase",
         type=bool,
@@ -25,8 +33,8 @@ def argparser():
     )
     parser.add_argument(
         "--eval",
-        type=int,
-        default=0,
+        type=bool,
+        default=False,
         help="Evaluate trained agents, how many times to evaluate",
     )
     parser.add_argument(
@@ -41,16 +49,36 @@ def argparser():
         default=False,
         help="Run the interactive game loop",
     )
+    parser.add_argument(
+        "--cfg_opts",
+        default=None,
+        nargs=argparse.REMAINDER,
+        help="Modify config options using the command-line",
+    )
     return parser.parse_args()
 
 def main():
     args = argparser()
-    
+    cfg = get_default_config()
+    if args.config_file:
+        # Parse the config file
+        cfg = parse_config_file(args.config_file)
+    trainer = Trainer.Trainer(
+        config=cfg,
+    )
+    if args.cfg_opts:
+        cfg.merge(args.cfg_opts)
+
+
     if args.train_settle_phase:
-        train_settlement_phase()
+        print("Training settle phase with config:", cfg)
+
+        trainer.train_settlement_phase()
     elif args.train:
-        train(n_episodes=2500)
-    elif args.eval != 0:
+        print("Training with config: \n", cfg)
+
+        trainer.train(n_episodes=cfg.train.num_episodes, seed=cfg.miscs.seed)
+    elif args.eval:
         for _ in range (args.eval):
             eval_trained_agents(render_mode='human', gamestate='normal_phase')
     elif args.test_env:
