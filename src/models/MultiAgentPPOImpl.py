@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -343,6 +345,19 @@ class MultiAgentPPO:
             torch.manual_seed(seed)
         best_reward = float('-inf')
         episode_rewards = []
+
+        # Create a directory for saved models if it doesn't exist
+        os.makedirs("saved_models", exist_ok=True)
+
+        # Determine the current run number once, at the start of training
+        run_number = len([
+            d for d in os.listdir("saved_models")
+            if os.path.isdir(os.path.join("saved_models", d))
+        ])
+        # e.g. "saved_models/run_000"
+        save_dir_root = f"saved_models/run_{run_number+1:03}"
+        os.makedirs(save_dir_root, exist_ok=True)
+    
         
         for episode in range(n_episodes):
             import time
@@ -444,21 +459,36 @@ class MultiAgentPPO:
             elapsed_time = time.time() - t0
                         
             # Print training progress
-            if (episode + 1) % 1 == 0:
-                avg_reward = sum(episode_rewards) / len(episode_rewards)
+            if (episode + 1) % 1 == 0:            
+                avg_reward_all_episodes = sum(episode_rewards) / len(episode_rewards)
                 print(f"Episode {episode + 1}/{n_episodes}: "
                       f"Steps: {step}, "
-                      f"Average Reward: {avg_reward:.2f}, " 
+                      f"Average Reward: {avg_reward_all_episodes:.2f}, " 
                       f"time={elapsed_time:.2f}s")
                 
-                if avg_reward > best_reward:
-                    best_reward = avg_reward
-                    # Save best model
+                
+                # Save models every 1000 episodes
+                if (episode + 1) % 1000 == 0:
+                    ep_dir = os.path.join(save_dir_root, f"ep_{episode + 1}")
+                    os.makedirs(ep_dir, exist_ok=True)
                     for agent_id in self.agents:
-                        torch.save(self.agents[agent_id]["network"].state_dict(), f"best_model_agent_{agent_id}.pt")
-                    
-        return episode_rewards
+                        model_path = os.path.join(ep_dir, f"model_agent_{agent_id}.pt")
+                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    print(f"Saved models for episode {episode + 1} in {ep_dir}")
+                
+                # If current average reward is better than all previous, save as "best_models"
+                # TODO: Save only the best model of all agents instead of checking for avg change in last ep.
+                # So, check if current iter of agent is better than earlier version of itself and save that model
+                if avg_reward_all_episodes > best_reward:
+                    best_reward = avg_reward_all_episodes
+                    best_dir = os.path.join(save_dir_root, "best_models")
+                    os.makedirs(best_dir, exist_ok=True)
+                    for agent_id in self.agents:
+                        model_path = os.path.join(best_dir, f"best_model_agent_{agent_id}.pt")
+                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    print(f"New best average reward {best_reward:.2f} — models saved to {best_dir}")
 
+    # Calculate rewards based on victory points and other game conditions
     def calculate_rewards(self, episode_reward, episode):
         victory_points = self.env.get_victory_points()
 
