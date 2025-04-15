@@ -3,6 +3,7 @@ Sub-Catan is a simplified implementation of the board game Catan, designed as a 
 compatible with the PettingZoo library. It makes it possible to train models compatible with the gym API in this turn-based multi-
 agent setting, with room to expand on the gamerules and actions!
 
+![Preview](demo/demo.gif)
 ## Table of Contents
 - Features
 - Requirements
