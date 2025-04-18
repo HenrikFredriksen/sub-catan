@@ -28,7 +28,7 @@ miscs = easydict({
     'print_interval_iters': 50,
     'seed': 42,
     'experiment_name': 'catan',
-    'log_dir': 'run_logs/catan_training/',
+    'log_dir': './run_logs/catan_training/',
     'render_mode': 'human',
     'verbose': True,
 })
@@ -44,7 +44,7 @@ train = easydict({
     'max_steps': 10000,
     'hidden_dim': 1536,
     'agent_policies': agent_policies,
-    'pretrained_model_path': 'saved_models/run_015_e10k/',
+    'pretrained_model_path': './saved_models/run_015/',
     'gamestate': 'settle_phase',
 })
 
@@ -52,7 +52,7 @@ eval = easydict({
     'eval_interval': 100,
     'render_mode': 'rgb_array',
     'num_evals': 1,
-    'model_path': 'saved_models/',
+    'model_path': './saved_models/',
 })
 
 test = easydict({
@@ -68,7 +68,7 @@ test = easydict({
     'agent_policies': agent_policies,
     'render_mode': 'human',
     'num_evals': 1,
-    'model_path': 'saved_models/',
+    'model_path': './saved_models/',
 })
 
 playingboards = easydict({

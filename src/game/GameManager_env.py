@@ -66,7 +66,7 @@ simulate_place_road(edge): method to place a road without needing player resourc
 @Date: 19. October 2024
 '''
 class GameManager:
-    def __init__(self, game_board, game_rules, players, console, verbose=False):
+    def __init__(self, game_board, game_rules, players, console, verbose=True):
         self.verbose = verbose
         self.turn = 0
         self.max_turns = 1000
@@ -97,10 +97,11 @@ class GameManager:
         
     @property
     def current_player(self):
-        return (self.starting_phase_players_stack[self.current_player_index] if self.turn == 0 
+        return (self.starting_phase_players_stack[self.current_player_index] if (self.turn == 0 and self.gamestate == 'settle_phase')
                 else self.players[self.current_player_index])
 
     def roll_phase(self):
+        print(f"Rolling dice for {self.current_player.get_color()}")
         if not self.dice_rolled:
             roll = self.roll_dice()
             self.dice_rolled = True
@@ -117,6 +118,7 @@ class GameManager:
             if self.verbose:
                 self.console.log("Dice already rolled this turn")
             
+    # TODO: implement robber movement and resource stealing
     def robber(self):
         for player in self.players:
             total_resources = sum(player.resources.values())
@@ -146,17 +148,13 @@ class GameManager:
             return False
         
     def pass_turn(self):
-        if self.dice_rolled == False:
-            self.roll_phase()
-            
+        # flag to check if the player has placed a piece this turn  
         if self.has_placed_piece:
             self.has_placed_piece = False
             
         self.player_passed_turn = True
-        self.dice_rolled = False
-        self.turn += 1
         if self.verbose:
-            self.console.log(f"{self.current_player.get_color()} passed their turn")
+            self.console.log(f"{self.current_player.get_color()} passed their turn, turn {self.turn}")
 
     def check_if_game_ended(self):
         if self.current_player.victory_points >= 10:
@@ -173,17 +171,12 @@ class GameManager:
         else:
             self.game_over = False
             return False
-               
-    def change_player(self):
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
-        if self.verbose:
-            print(f"Changed to player {self.current_player_index}, {self.current_player.color}")
         
     def roll_dice(self):
         dice1 = np.random.randint(1, 7)
         dice2 = np.random.randint(1, 7)
         if self.verbose:
-            self.console.log(f"Dice rolled: {dice1}, {dice2}")
+            self.console.log(f"player: {self.current_player.get_color()} rolled Dice : {dice1}, {dice2}")
         return dice1 + dice2
     
     def trade_with_bank(self, trade_in_resource, get_back_resource):
