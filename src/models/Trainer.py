@@ -24,13 +24,14 @@ class Trainer:
         self.cfg = config
         #self.args = args
         self.env = None
-        self.config = config
         self.writer = SummaryWriter(log_dir=self.cfg.miscs.log_dir)
+        self.verbose = config.miscs.verbose 
 
+        self.seed = self.cfg.miscs.seed
         self.batch_size = self.cfg.train.batch_size
         self.num_episodes = self.cfg.train.num_episodes
         self.learning_rate = self.cfg.train.learning_rate
-        self.eval_interval = self.cfg.test.eval_interval
+        #self.eval_interval = self.cfg.eval.eval_interval
         self.gamma = self.cfg.train.gamma
         self.gae_lambda = self.cfg.train.gae_lambda
         self.clip_epsilon = self.cfg.train.clip_epsilon
@@ -40,7 +41,7 @@ class Trainer:
         self.agent_policies = self.cfg.train.agent_policies
 
         
-    ##Argument parser
+    # Argument parser
     def make_parser():
         parser = argparse.ArgumentParser(description="Train Catan agents")
         parser.add_argument(
@@ -85,8 +86,7 @@ class Trainer:
         )
 
         n_episodes = 500
-        base_seed = 42
-        rewards = ppo.train(n_episodes, seed=base_seed)
+        rewards = ppo.train(n_episodes, seed=self.seed, max_turns_without_building=1000)
 
         for agent_id in ppo.agents:
             torch.save(
@@ -97,10 +97,10 @@ class Trainer:
         self.writer.close()
         return ppo
 
-    def train(self, gamestate='normal_phase', n_episodes=1, seed=None):
+    def train(self, gamestate='normal_phase', n_episodes=1, seed=1234):
         # Change gamestate 'settle_phase' to run whole game training
         # Change gamestate 'normal_phase' to run normal phase training with loaded board
-        self.env = CatanEnv(gamestate=gamestate)
+        self.env = CatanEnv(gamestate=gamestate, render_mode=self.cfg.miscs.render_mode, verbose=self.verbose)
 
         # Init PPO agent
         ppo = MultiAgentPPO(
@@ -120,12 +120,12 @@ class Trainer:
 
 
         for agent_id, agent_data in ppo.agents.items():
-            pretrained_path = f"best_model_agent_player_{agent_id}.pt"
-            if os.path.exists(pretrained_path):
-                ppo.agents[agent_id]["network"].load_state_dict(
-                    torch.load(pretrained_path)
-                )
-                print(f"Loaded pretrained model for agent {agent_id}")
+            #pretrained_path = f"{self.cfg.train.pretrained_model_path}best_model_agent_player_{agent_id}.pt"
+            #if os.path.exists(pretrained_path):
+            #    ppo.agents[agent_id]["network"].load_state_dict(
+            #        torch.load(pretrained_path)
+            #    )
+            #    print(f"Loaded pretrained model for agent {agent_id}")
 
             model = agent_data['network']
             total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -136,7 +136,7 @@ class Trainer:
             print(message)
 
         # Train the agent
-        rewards = ppo.train(n_episodes, seed=seed, max_turns_without_building=2000)
+        rewards = ppo.train(n_episodes, seed=seed, max_turns_without_building=1000)
 
         self.writer.close()
 

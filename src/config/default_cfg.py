@@ -16,12 +16,21 @@ from os.path import dirname, join
 from easydict import EasyDict as easydict
 from tabulate import tabulate
 
+agent_policies = {
+    'player_1': 'alternative',
+    'player_2': 'baseline',
+    'player_3': 'alternative',
+    'player_4': 'baseline'
+}
+
 
 miscs = easydict({
     'print_interval_iters': 50,
     'seed': 42,
     'experiment_name': 'catan',
     'log_dir': 'run_logs/catan_training/',
+    'render_mode': 'human',
+    'verbose': True,
 })
 
 train = easydict({
@@ -34,18 +43,32 @@ train = easydict({
     'n_epochs': 4,
     'max_steps': 10000,
     'hidden_dim': 1536,
-    'agent_policies': {
-        'player_1': 'alternative',
-        'player_2': 'baseline',
-        'player_3': 'alternative',
-        'player_4': 'baseline'
-    },
+    'agent_policies': agent_policies,
+    'pretrained_model_path': 'saved_models/run_015_e10k/',
+    'gamestate': 'settle_phase',
 })
 
-test = easydict({
+eval = easydict({
     'eval_interval': 100,
     'render_mode': 'rgb_array',
     'num_evals': 1,
+    'model_path': 'saved_models/',
+})
+
+test = easydict({
+    'batch_size': 1,
+    'num_episodes': 1,
+    'learning_rate': 0.0002,
+    'gamma': 0.99,
+    'gae_lambda': 0.95,
+    'clip_epsilon': 0.4,
+    'n_epochs': 4,
+    'max_steps': 10000,
+    'hidden_dim': 1536,
+    'agent_policies': agent_policies,
+    'render_mode': 'human',
+    'num_evals': 1,
+    'model_path': 'saved_models/',
 })
 
 playingboards = easydict({
@@ -59,6 +82,7 @@ class Config(metaclass=ABCMeta):
         self.miscs = miscs
         self.train = train
         self.test = test
+        self.eval = eval
         self.playingboards = playingboards
         self.model = easydict()
 
@@ -94,7 +118,12 @@ class Config(metaclass=ABCMeta):
             # Attempt type casting or literal_eval if the types differ
             if (original_val is not None) and (original_type != type(value)):
                 try:
-                    value = original_type(value)
+                    if original_type is bool:
+                        # accept 1/0, true/false, yes/no (case‑insensitive)
+                        from distutils.util import strtobool
+                        value = bool(strtobool(str(value)))
+                    else:
+                        value = original_type(value)
                 except (ValueError, SyntaxError):
                     value = ast.literal_eval(str(value))
 

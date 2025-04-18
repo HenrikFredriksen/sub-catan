@@ -4,11 +4,11 @@ import argparse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.Evaluator import eval_trained_agents
+from models.Evaluator import Evaluator
 from models import Trainer
 from gameloop.GameLoop import GameLoop
 from models.test_catan_env_random_action import test_environment
-from config import get_default_config, parse_config_file
+from config import get_default_config, parse_config_file, Config
 
 def argparser():
     parser = argparse.ArgumentParser(description="Train Catan agents")
@@ -59,16 +59,14 @@ def argparser():
 
 def main():
     args = argparser()
-    cfg = get_default_config()
+    cfg = parse_config_file(args.config_file) if args.config_file else get_default_config() 
     if args.config_file:
         # Parse the config file
-        cfg = parse_config_file(args.config_file)
+        cfg.merge(args.cfg_opts)
+    
     trainer = Trainer.Trainer(
         config=cfg,
     )
-    if args.cfg_opts:
-        cfg.merge(args.cfg_opts)
-
 
     if args.train_settle_phase:
         print("Training settle phase with config:", cfg)
@@ -77,10 +75,11 @@ def main():
     elif args.train:
         print("Training with config: \n", cfg)
 
-        trainer.train(n_episodes=cfg.train.num_episodes, seed=cfg.miscs.seed)
+        trainer.train(n_episodes=cfg.train.num_episodes, seed=cfg.miscs.seed, gamestate=cfg.train.gamestate)
     elif args.eval:
-        for _ in range (args.eval):
-            eval_trained_agents(render_mode='human', gamestate='normal_phase')
+        evaluator = Evaluator(cfg)
+        for _ in range (cfg.test.num_evals):
+            evaluator.eval_trained_agents(render_mode=cfg.eval.render_mode, gamestate='normal_phase')
     elif args.test_env:
         test_environment()
     elif args.interactive:
