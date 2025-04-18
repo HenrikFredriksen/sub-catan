@@ -206,7 +206,7 @@ class MultiAgentPPO:
             try:
                 policy, value = self.agents[agent_id]["network"](state, action_mask)
 
-
+                # Check for NaN in policy or value and set random valid_action if policy is NaN
                 if torch.isnan(policy).any():
                     print(f"Warning: NaN in policy for agent {agent_id}")
                     # Return a dummy action
@@ -222,6 +222,7 @@ class MultiAgentPPO:
                 prob = dist.log_prob(action)
 
                 if action_mask[action] == 0:
+                    print(f"Warning: Invalid action {action.item()} chosen for agent {agent_id}")
                     # Fallback safe
                     valid_actions = torch.nonzero(action_mask).flatten()
                     action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
@@ -405,6 +406,7 @@ class MultiAgentPPO:
                 # Choose and take action
                 action_data = self.choose_action(agent_id, observation)
                 if action_data is None:
+                    print("action data was none")
                     # If no valid action, pass
                     self.env.step(None)
                     continue
@@ -434,7 +436,7 @@ class MultiAgentPPO:
                 step += 1
 
             # After the episode ends, proceed to learning and reward calculation
-            self.calculate_rewards(episode_reward, episode)
+            self.calculate_additional_rewards(episode_reward, episode)
             
             #logging
             total_episode_reward = sum(episode_reward.values())
@@ -489,9 +491,10 @@ class MultiAgentPPO:
                     print(f"New best average reward {best_reward:.2f} — models saved to {best_dir}")
 
     # Calculate rewards based on victory points and other game conditions
-    def calculate_rewards(self, episode_reward, episode):
+    def calculate_additional_rewards(self, episode_reward, episode):
         victory_points = self.env.get_victory_points()
 
+        # Sort agents by victory points and reward based on placement
         rankings = sorted(victory_points.items(), key=lambda x: x[1], reverse=True)
 
         position_rewards = {
