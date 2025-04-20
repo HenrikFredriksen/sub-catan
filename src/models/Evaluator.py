@@ -59,10 +59,11 @@ class Evaluator:
             )
 
         for agent_id in ppo.agents:
-            evaluation_model_path = f"{self.model_path}run_015_e10k/best_model_agent_{agent_id}.pt"
+            evaluation_model_path = f"{self.model_path}best_model_agent_{agent_id}.pt"
+            print(f"Loading model from {evaluation_model_path}")
             if os.path.exists(evaluation_model_path):
                 ppo.agents[agent_id]["network"].load_state_dict(
-                    torch.load(evaluation_model_path)
+                    torch.load(evaluation_model_path, weights_only=True)
                 )
                 print(f"Loaded model for agent {agent_id}")
 

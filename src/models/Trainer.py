@@ -120,20 +120,23 @@ class Trainer:
 
 
         for agent_id, agent_data in ppo.agents.items():
-            #pretrained_path = f"{self.cfg.train.pretrained_model_path}best_model_agent_player_{agent_id}.pt"
-            #if os.path.exists(pretrained_path):
-            #    ppo.agents[agent_id]["network"].load_state_dict(
-            #        torch.load(pretrained_path)
-            #    )
-            #    print(f"Loaded pretrained model for agent {agent_id}")
+            pretrained_path = f"{self.cfg.train.pretrained_model_path}best_model_agent_{agent_id}.pt"
+            if os.path.exists(pretrained_path):
+                try:
+                    ppo.agents[agent_id]["network"].load_state_dict(
+                        torch.load(pretrained_path, weights_only=True)
+                    )
+                    print(f"Loaded pretrained model for agent {agent_id}")
+                except Exception as e:
+                    print(f"Error loading pretrained model for agent {agent_id}: {e}")
 
             model = agent_data['network']
             total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            message = f"{agent_id} parameter count: {total_params}"
+            param_message = f"{agent_id} parameter count: {total_params}"
 
-            self.writer.add_text("Model/ParameterCount", message)
+            self.writer.add_text("Model/ParameterCount", param_message)
 
-            print(message)
+            print(param_message)
 
         # Train the agent
         rewards = ppo.train(n_episodes, seed=seed, max_turns_without_building=1000)
