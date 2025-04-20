@@ -227,7 +227,6 @@ class CatanEnv(AECEnv):
         return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
-        print(f"Resetting environment, gamestate: {self.gamestate}")
         if seed is not None:
             np.random.seed(seed)
             random.seed(seed)
@@ -247,17 +246,15 @@ class CatanEnv(AECEnv):
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {'seed': seed} for agent in self.agents}
         
-        print(f"Starting new game with agents: {self.agents}")
-        print(f"Terminations: {self.terminations}")
+        #print(f"Starting new game with agents: {self.agents}")
+        #print(f"Terminations: {self.terminations}")
 
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
-        print(f"Agent name mapping: {self.agent_name_mapping}")
-        print(f"possible agents: {self.possible_agents}")
+
         # reset game components
         if self.gamestate == 'normal_phase':
             self._agent_selector = agent_selector(self.possible_agents)
             self.agent_selection = self.agents[0]
-            print("next agent normal_phase: {}".format(self._agent_selector.next()))
             self.game_board = self.load_random_board_normal_phase()
             self.game_board.set_screen_dimensions(1400, 700)
             self.game_rules = GameRules(self.game_board)
@@ -278,7 +275,6 @@ class CatanEnv(AECEnv):
             print(self.starting_agents)
             self._agent_selector = CustomAgentSelector(self.starting_agents)
             self.agent_selection = self.agents[0]
-            print("next agent settle_phase: {}".format(self.agent_selection))
 
             self.game_board.generate_board(board_radius=2)
             self.game_board.set_screen_dimensions(1400, 700)
@@ -359,7 +355,8 @@ class CatanEnv(AECEnv):
         file_path = os.path.join('normal_phase_boards', random_board_file)
         with open(file_path, 'rb') as f:
             game_board = pickle.load(f)
-            print(f"Loaded board from {file_path}")
+            if self.verbose:
+                print(f"Loaded board from {file_path}")
         return game_board
     
     def observe(self, agent):
@@ -561,18 +558,16 @@ class CatanEnv(AECEnv):
             # If the turn is over, the next agent should be the next one, sync with game_manager
             if self.game_manager.is_turn_over():
                 self.f_was_turn_passed = True
-                #print(f"agent selection: {self.agents}, game_manager.current_player_index: {self.game_manager.current_player_index}")
                 self.previous_agent = self.agent_name_mapping[self.agent_selection]
                 self.agent_selection = self._agent_selector.next()
+
                 # change player in game_manager
                 self.game_manager.current_player_index = self.agent_name_mapping[self.agent_selection]
                 self.game_manager.dice_rolled = False
                 self.game_manager.turn += 1
-                #print(self.agents[0], self.agents[1], self.agents[2], self.agents[3])
-                #print(f"new player/agent: {self.game_manager.current_player_index}.{self.game_manager.current_player.get_color()}/{self.agent_selection} ")
-                # Reset the game manager for the next turn
+
+                # Reset the game manager pass turn flag
                 self.game_manager.player_passed_turn = False
-                print(f"Turn: {self.game_manager.turn}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
             # If the agent is not done doing their actions, they should continue
             else:
                 self.agent_selection = agent

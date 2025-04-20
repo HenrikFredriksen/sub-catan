@@ -101,7 +101,8 @@ class GameManager:
                 else self.players[self.current_player_index])
 
     def roll_phase(self):
-        print(f"Rolling dice for {self.current_player.get_color()}")
+        if self.verbose:
+            self.console.log(f"Rolling dice for {self.current_player.get_color()}")
         if not self.dice_rolled:
             roll = self.roll_dice()
             self.dice_rolled = True
