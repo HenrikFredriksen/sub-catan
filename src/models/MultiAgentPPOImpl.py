@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -62,12 +64,12 @@ class AlternativeNetwork(nn.Module):
         self.shared_layers = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, int(hidden_dim * 2)),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim * 2, int(hidden_dim * 1.5)),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
+            nn.Linear(int(hidden_dim * 1.5), hidden_dim),
+            nn.ReLU(),
         )
         self.policy_head = nn.Sequential(nn.Linear(hidden_dim, output_dim), nn.Softmax(dim=-1))
         self.value_head = nn.Sequential(nn.Linear(hidden_dim, 1))
@@ -163,6 +165,10 @@ class MultiAgentPPO:
         self.c1 = kwargs.get('c1', 0.5)
         self.c2 = kwargs.get('c2', 0.01)
         self.max_steps = kwargs.get('max_steps', 10000)
+
+        # global counter for "update steps" (one PPO epoch over one batch)
+        self.global_step = 0
+        self.update_step = 0
         
         # Init networks and optimizers for each agent
         self.agents = {}
@@ -204,7 +210,7 @@ class MultiAgentPPO:
             try:
                 policy, value = self.agents[agent_id]["network"](state, action_mask)
 
-
+                # Check for NaN in policy or value and set random valid_action if policy is NaN
                 if torch.isnan(policy).any():
                     print(f"Warning: NaN in policy for agent {agent_id}")
                     # Return a dummy action
@@ -220,6 +226,7 @@ class MultiAgentPPO:
                 prob = dist.log_prob(action)
 
                 if action_mask[action] == 0:
+                    print(f"Warning: Invalid action {action.item()} chosen for agent {agent_id}")
                     # Fallback safe
                     valid_actions = torch.nonzero(action_mask).flatten()
                     action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
@@ -283,6 +290,9 @@ class MultiAgentPPO:
                 new_probs = dist.log_prob(actions)
                 entropy = dist.entropy().mean()
 
+                # 1. Approx‑KL (measured BEFORE we clamp ratio)
+                approx_kl = (old_probs - new_probs).mean()
+
                 ratio = (new_probs - old_probs).exp()
                 ratio = torch.clamp(ratio, -10, 10)  # Prevent extreme ratios
 
@@ -307,15 +317,35 @@ class MultiAgentPPO:
 
                 optimizer.zero_grad()
                 loss.backward()
-                # Gradient clipping
-                torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+
+                grad_norm = torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+
                 optimizer.step()
+
+                clip_fraction = (ratio.detach().abs() > self.clip_epsilon).float().mean()
+
+                # Explained variance of the value function
+                var_y = rewards.var(unbiased=False)
+                explained_var = (torch.tensor(0.) if var_y == 0
+                                 else 1 - (rewards - value.detach()).var(unbiased=False) / var_y)
 
                 # Collect for logging
                 policy_losses.append(policy_loss.item())
                 value_losses.append(value_loss.item())
                 total_losses.append(loss.item())
                 entropies.append(entropy.item())
+
+
+                # push per‑epoch stats to TensorBoard
+                self._log_update_stats(agent_id,
+                                       policy_loss = policy_loss.item(),
+                                       value_loss  = value_loss.item(),
+                                       entropy     = entropy.item(),
+                                       approx_kl   = approx_kl.item(),
+                                       clip_frac   = clip_fraction.item(),
+                                       grad_norm   = grad_norm.item(),
+                                       explained_var = explained_var.item())
+
 
                 # Monitor loss values
                 if torch.isnan(loss):
@@ -324,28 +354,43 @@ class MultiAgentPPO:
 
             memory.clear()
 
-            avg_policy_loss = np.mean(policy_losses)
-            avg_value_loss = np.mean(value_losses)
-            avg_total_loss = np.mean(total_losses)
-            avg_entropy = np.mean(entropies)
+            #avg_policy_loss = np.mean(policy_losses)
+            #avg_value_loss = np.mean(value_losses)
+            #avg_total_loss = np.mean(total_losses)
+            #avg_entropy = np.mean(entropies)
             
-            self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
-            self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
-            self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
-            self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
+            #self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
+            #self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
+            #self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
+            #self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
 
         except Exception as e:
             print(f"Error in learning step for agent {agent_id}: {e}")
             memory.clear()
 
-    def train(self, n_episodes, seed=None, max_turns_without_building=100):
+    def train(self, n_episodes, seed=None, max_turns_without_building=100, verbose=False):
         if seed is not None:
             torch.manual_seed(seed)
         best_reward = float('-inf')
         episode_rewards = []
+
+        # Create a directory for saved models if it doesn't exist
+        os.makedirs("saved_models", exist_ok=True)
+
+        # Determine the current run number once, at the start of training
+        run_number = len([
+            d for d in os.listdir("saved_models")
+            if os.path.isdir(os.path.join("saved_models", d))
+        ])
+        # e.g. "saved_models/run_000"
+        save_dir_root = f"saved_models/run_{run_number+1:03}"
+        os.makedirs(save_dir_root, exist_ok=True)
+    
         
         for episode in range(n_episodes):
-            print(f"Starting episode {episode + 1}")
+            import time
+            t0 = time.time()
+            #print(f"Starting episode {episode + 1}")
             
             episode_seed = seed + episode if seed is not None else None
             obs = self.env.reset(seed=episode_seed, return_info=True)[0]
@@ -388,6 +433,7 @@ class MultiAgentPPO:
                 # Choose and take action
                 action_data = self.choose_action(agent_id, observation)
                 if action_data is None:
+                    print("action data was none")
                     # If no valid action, pass
                     self.env.step(None)
                     continue
@@ -399,7 +445,7 @@ class MultiAgentPPO:
 
                 # Update rewards and done status
                 reward = self.env.rewards.get(agent_id, 0)
-                print(f"Agent {agent_id} took action {action} and got reward {reward}")
+                #print(f"Agent {agent_id} took action {action} and got reward {reward}")
                 done[agent_id] = self.env.terminations.get(agent_id, False) or self.env.truncations.get(agent_id, False)
                 episode_reward[agent_id] += reward
 
@@ -417,41 +463,73 @@ class MultiAgentPPO:
                 step += 1
 
             # After the episode ends, proceed to learning and reward calculation
-            self.calculate_rewards(episode_reward, episode)
+            self.calculate_additional_rewards(episode_reward, episode, verbose)
             
             #logging
             total_episode_reward = sum(episode_reward.values())
             avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
             episode_rewards.append(avg_episode_reward)
-            
-            self.writer.add_scalar("Average Reward per episode", avg_episode_reward, episode)
+
+            self._log_global(AverageReward = avg_episode_reward,
+                             TotalReward   = total_episode_reward,
+                             EpisodeLength = self.env.step_count) # Duplicate values of step count in env and in trainer
             
             # Check if it's time to learn
             for agent_id in self.env.possible_agents:
+                self.writer.add_scalar(f"Agent_{agent_id}/Ep_Reward", episode_reward[agent_id], episode)
                 if len(self.memories[agent_id].states) > 0:
                     self.learn(agent_id, episode)
+            
                         
             # Calculate average reward for this episode
             
             for agent_id in self.env.possible_agents:
                 self.memories[agent_id].clear()
-            
-            # Print training progress
-            if (episode + 1) % 1 == 0:
-                avg_reward = sum(episode_rewards) / len(episode_rewards)
-                print(f"Episode {episode + 1}, Average Reward: {avg_reward:.2f}")
-                
-                if avg_reward > best_reward:
-                    best_reward = avg_reward
-                    # Save best model
-                    for agent_id in self.agents:
-                        torch.save(self.agents[agent_id]["network"].state_dict(), f"best_model_agent_{agent_id}.pt")
-                    
-        return episode_rewards
 
-    def calculate_rewards(self, episode_reward, episode):
+            elapsed_time = time.time() - t0
+                        
+            # Print training progress
+            if (episode + 1) % 1 == 0:            
+                avg_reward_all_episodes = sum(episode_rewards) / len(episode_rewards)
+                print(f"Episode {episode + 1}/{n_episodes}: "
+                      f"Steps: {step}, "
+                      f"Average Reward: {avg_reward_all_episodes:.2f}, " 
+                      f"time={elapsed_time:.2f}s")
+                
+                # Log the average reward for the episode, with 2 decimal places 
+                print(f"AVG REWARD: {episode_reward[agent_id]:.2f} | "
+                      f"P_1: {episode_reward['player_1']:.2f} | "
+                      f"P_2: {episode_reward['player_2']:.2f} | "
+                      f"P_3: {episode_reward['player_3']:.2f} | "
+                      f"P_4: {episode_reward['player_4']:.2f}")
+                
+                
+                # Save models every 1000 episodes
+                if (episode + 1) % 1000 == 0:
+                    ep_dir = os.path.join(save_dir_root, f"ep_{episode + 1}")
+                    os.makedirs(ep_dir, exist_ok=True)
+                    for agent_id in self.agents:
+                        model_path = os.path.join(ep_dir, f"model_agent_{agent_id}.pt")
+                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    print(f"Saved models for episode {episode + 1} in {ep_dir}")
+                
+                # If current average reward is better than all previous, save as "best_models"
+                # TODO: Save only the best model of all agents instead of checking for avg change in last ep.
+                # So, check if current iter of agent is better than earlier version of itself and save that model
+                if avg_reward_all_episodes > best_reward:
+                    best_reward = avg_reward_all_episodes
+                    best_dir = os.path.join(save_dir_root, "best_models")
+                    os.makedirs(best_dir, exist_ok=True)
+                    for agent_id in self.agents:
+                        model_path = os.path.join(best_dir, f"best_model_agent_{agent_id}.pt")
+                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    print(f"New best average reward {best_reward:.2f} — models saved to {best_dir}")
+
+    # Calculate rewards based on victory points and other game conditions
+    def calculate_additional_rewards(self, episode_reward, episode, verbose):
         victory_points = self.env.get_victory_points()
 
+        # Sort agents by victory points and reward based on placement
         rankings = sorted(victory_points.items(), key=lambda x: x[1], reverse=True)
 
         position_rewards = {
@@ -462,7 +540,7 @@ class MultiAgentPPO:
         }
 
         for position, (agent_id, vp) in enumerate(rankings):
-            self.writer.add_scalar(f"Victory Points/{agent_id}", vp, episode)
+            self.writer.add_scalar(f"Agent_{agent_id}/VPs", vp, episode)
 
             scalar = position_rewards[position]
             episode_reward[agent_id] += scalar
@@ -470,9 +548,11 @@ class MultiAgentPPO:
             if position == 0 and self.env.game_manager.game_ended_by_victory_points:
                 extra_reward = 20
                 episode_reward[agent_id] += extra_reward
-                print(f"Agent {agent_id} got extra reward of {extra_reward} for winning the game")
-            
-            print(f"{agent_id} placed {position + 1} with {vp} victory points and got reward {episode_reward[agent_id]}")
+                if verbose:
+                    print(f"Agent {agent_id} got extra reward of {extra_reward} for winning the game")
+
+            if verbose:
+                print(f"{agent_id} placed {position + 1} with {vp} victory points and got reward {episode_reward[agent_id]}")
 
             vp_reward = vp * 2
             episode_reward[agent_id] += vp_reward
@@ -480,6 +560,19 @@ class MultiAgentPPO:
             if self.env.terminations.get(agent_id, False):
                 termination_penalty = -10
                 episode_reward[agent_id] += termination_penalty
-                print(f"Agent {agent_id} got termination reward of {termination_penalty}")
-            
-            print(f"{agent_id} final reward: {episode_reward[agent_id]}")
+                if verbose:
+                    print(f"Agent {agent_id} got termination penalty of {termination_penalty}")
+
+    # Logging helper functions
+    def _log_update_stats(self, agent_id: str, **scalars):
+        for name, value in scalars.items():
+            # e.g.  "Agent_player_1/policy_loss"
+            tag = f"Agent_{agent_id}/{name}"
+            self.writer.add_scalar(tag, value, self.update_step)
+        # one log event = one "update step"
+        self.update_step += 1
+
+    def _log_global(self, **scalars):
+        for name, value in scalars.items():
+            self.writer.add_scalar(f"Global/{name}", value, self.global_step)
+        self.global_step += 1          # create this counter in __init__

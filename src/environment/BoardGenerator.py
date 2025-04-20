@@ -43,7 +43,7 @@ def generate_and_save_boards(num_boards, players, output_dir, max_attempts=100):
     os.makedirs(output_dir, exist_ok=True)
     generated_boards = 0
     while generated_boards < num_boards:
-        print(f"Generated {generated_boards + 1}/{num_boards} boards")
+        print(f"Generating board {generated_boards + 1}/{num_boards}")
         
         game_board = GameBoard()
         game_board.generate_board(board_radius=2)

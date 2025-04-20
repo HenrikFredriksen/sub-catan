@@ -75,32 +75,21 @@ class GameManager:
         for player in self.players:
             total_resources = sum(player.resources.values())
             if total_resources > 7:
-                
                 resources_to_keep = total_resources // 2
-                current_resources = dict(player.resources)
-                
-                sorted_resources = sorted(
-                    current_resources.items(), 
-                    key=lambda x: x[1],
-                    reverse=True
-                )
-                
-                for resource in player.resources:
-                    player.resources[resource] = 0
-                    
-                remainder_to_keep = resources_to_keep
-                for resource, amount in sorted_resources:
-                    if remainder_to_keep <= 0:
+                discard = total_resources - resources_to_keep
+
+                while discard > 0:
+                    max_key = max(player.resources, key=player.resources.get)   
+
+                    if player.resources[max_key] <= 0:
                         break
-                    
-                    keep_amount = min(amount, remainder_to_keep)
-                    player.resources[resource] = keep_amount
-                    remainder_to_keep -= keep_amount
-                
-                self.console.log(f"{player.get_color()} had to discard resources (kept {resources_to_keep})")
+
+                    player.resources[max_key] -= 1                 
+                    discard -= 1
+                self.console.log(f"{player.get_color()} had to discard resources (kept {player.resources}), total resources: {total_resources}")
             else:
                 self.console.log(f"{player.get_color()} did not have to discard resources, total resources: {total_resources}")
-         
+            
     def starting_phase(self):
         if self.starting_sub_phase == 'house':
             self.find_available_house__and_city_locations()

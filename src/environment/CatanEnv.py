@@ -113,8 +113,9 @@ class CatanEnv(AECEnv):
     '''
     metadata = {'render.modes': ['human', 'rgb_array'], 'gamestate': ['settle_phase', 'normal_phase'], 'name': 'catan_v0'}
     
-    def __init__(self, render_mode=None, gamestate='normal_phase'):
+    def __init__(self, render_mode=None, gamestate='normal_phase', verbose=False):
         super().__init__()
+        self.verbose = verbose
         self.render_mode = render_mode
         self.gamestate = gamestate
         if self.render_mode == "human" or self.render_mode == "rgb_array":
@@ -139,8 +140,8 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))        
-        self._agent_selector = agent_selector(self.agents)
+        self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))  
+        self.agent_selection = None      
         
         self.game_board = GameBoard(self.tile_images, self.number_images)            
         self.game_board.set_screen_dimensions(1400, 700)
@@ -196,6 +197,9 @@ class CatanEnv(AECEnv):
         
         #FLAGS
         self.was_placement_successful = False
+        self.previous_agent = 0
+        self.current_agent = 0
+        self.f_was_turn_passed = False
         
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -223,7 +227,6 @@ class CatanEnv(AECEnv):
         return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
-        
         if seed is not None:
             np.random.seed(seed)
             random.seed(seed)
@@ -235,7 +238,6 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self.agent_selection = self.agents[0]
         
         # reset game state dictionaries
         self.rewards = {agent: 0 for agent in self.agents}
@@ -244,14 +246,15 @@ class CatanEnv(AECEnv):
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {'seed': seed} for agent in self.agents}
         
-        self.console.log(f"Starting new game with agents: {self.agents}")
-        self.console.log(f"Terminations: {self.terminations}")
+        #print(f"Starting new game with agents: {self.agents}")
+        #print(f"Terminations: {self.terminations}")
 
         self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))
 
         # reset game components
         if self.gamestate == 'normal_phase':
             self._agent_selector = agent_selector(self.possible_agents)
+            self.agent_selection = self.agents[0]
             self.game_board = self.load_random_board_normal_phase()
             self.game_board.set_screen_dimensions(1400, 700)
             self.game_rules = GameRules(self.game_board)
@@ -269,7 +272,10 @@ class CatanEnv(AECEnv):
             self.edges_list = list(self.game_board.edges.values())
         # Settle phase
         else:
+            print(self.starting_agents)
             self._agent_selector = CustomAgentSelector(self.starting_agents)
+            self.agent_selection = self.agents[0]
+
             self.game_board.generate_board(board_radius=2)
             self.game_board.set_screen_dimensions(1400, 700)
             self.game_rules = GameRules(self.game_board)
@@ -287,6 +293,7 @@ class CatanEnv(AECEnv):
             self.edges_list = list(self.game_board.edges.values())
 
         player_id_map = {player.player_id: player for player in self.players}
+
         
         for vertex in self.game_board.vertices.values():
             if vertex.house:
@@ -301,16 +308,22 @@ class CatanEnv(AECEnv):
                 edge.road.player = player_id_map[edge_road_player_id]
                 
         # reset game manager and generate new board
-        self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
+        self.game_manager = GameManager(game_board=self.game_board, 
+                                        game_rules=self.game_rules, 
+                                        players=self.players, 
+                                        console=self.console, 
+                                        verbose=self.verbose)
         self.game_manager.gamestate = self.gamestate
+        if self.gamestate == 'normal_phase':
+            self.game_manager.turn = 1
         self.game_manager.dice_rolled = False
         # uncomment to generate a new board
         
-        print(f"Players in player_id_map: {list(player_id_map.keys())}")
+        #print(f"Players in player_id_map: {list(player_id_map.keys())}")
         houses_with_settle_bonus = {player.player_id: False for player in self.players}
         for vertex in self.game_board.vertices.values():
             if vertex.house:
-                print(f"House player_id: {vertex.house.player.player_id}")
+                #print(f"House player_id: {vertex.house.player.player_id}")
                 player = vertex.house.player
                 if not houses_with_settle_bonus[player.player_id]:
                     self.game_manager.settlement_bonus(vertex)
@@ -342,7 +355,8 @@ class CatanEnv(AECEnv):
         file_path = os.path.join('normal_phase_boards', random_board_file)
         with open(file_path, 'rb') as f:
             game_board = pickle.load(f)
-            print(f"Loaded board from {file_path}")
+            if self.verbose:
+                print(f"Loaded board from {file_path}")
         return game_board
     
     def observe(self, agent):
@@ -468,8 +482,14 @@ class CatanEnv(AECEnv):
         return victory_points
         
     def step(self, action):
+        # Assert that the turn order is correct according to normal phase progression
+        if (self.game_manager.gamestate == 'normal_phase' and self.f_was_turn_passed and self.game_manager.turn >= 3):
+            self.f_was_turn_passed = False
+            assert self.agent_name_mapping[self.agent_selection] != self.previous_agent
+
         self.step_count += 1
-        self.console.log(f"step_{self.step_count}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
+        if self.verbose:
+            print(f"step_{self.step_count}, agent: {self.agent_selection}, gamestate: {self.game_manager.gamestate}")
         
         # Set the current agent and player
         agent = self.agent_selection
@@ -484,12 +504,13 @@ class CatanEnv(AECEnv):
         
         # Get all valid actions for the current agent, and check if the action is valid
         valid_actions = self.get_valid_actions(agent)
-        self.console.log(f"step_Valid actions: {valid_actions}")
+        if self.verbose:
+            print(f"step_Valid actions: {valid_actions}")
         if action not in valid_actions:
             # Action is invalid, terminate agent
             self.rewards[agent] = -2.0
             self.terminations[agent] = True
-            self.console.log(f"step_Invalid action: {action}, terminated.")
+            print(f"step_Invalid action: {action}, terminated.")
             self._was_dead_step(action)
             return
         else:
@@ -499,7 +520,8 @@ class CatanEnv(AECEnv):
 
             # Update rewards for actions done this step
             self.rewards[agent] = self.calculate_reward(agent, action_type)
-            self.console.log(f"Agent {agent} executed action {action_type}, reward: {self.rewards[agent]}")
+            if self.verbose:
+                print(f"Agent {agent} executed action {action_type}, reward: {self.rewards[agent]}")
         
         # Check if the game has ended
         game_over = self.game_manager.check_if_game_ended()
@@ -508,12 +530,15 @@ class CatanEnv(AECEnv):
                 self.terminations[ag] = True
                 self.rewards[ag] += 20 if self.game_manager.game_ended_by_victory_points else 0
             self.infos[agent]['reason'] = 'Victory'
-            self.console.log(f"step_Game Over!")
-            self.console.log(f"step_Terminating all agents: {self.terminations}")
+
+            if self.verbose:
+                print(f"step_Game Over!")
+                print(f"step_Terminating all agents: {self.terminations}")
 
         # Settle phase
         if self.game_manager.gamestate == 'settle_phase':
-            # If the current sub-phase is road, it means a house was placed this step, so the next agent should be the same
+            #print("inside settlephase islast if statement")
+            # If the current sub-phase is road, it means a house was placed this step, so the next step should be the same agent
             if self.game_manager.starting_sub_phase == 'road' and self.game_manager.has_placed_piece:
                 self.agent_selection = agent
             # If the current sub-phase is house, it means a road was placed this step, so the next agent should be the next one
@@ -522,15 +547,27 @@ class CatanEnv(AECEnv):
                   
             # If the settle_phase is over, the next agent should be the same as the current one
             if self._agent_selector.is_last():
-                self._agent_selector = agent_selector(self.agents)
+                self._agent_selector = agent_selector(self.possible_agents)
                 self.agent_selection = self.agents[0]
+                print(f"settle_phase is over, agent: {self.agents[0]}")
                 self.game_manager.gamestate = 'normal_phase'
-                self.console.log(f"step_Phase transition to normal phase")
+                if self.verbose:
+                    print(f"step_Phase transition to normal phase")
         # Normal phase
         else:
-            # If the turn is over, the next agent should be the next one
+            # If the turn is over, the next agent should be the next one, sync with game_manager
             if self.game_manager.is_turn_over():
+                self.f_was_turn_passed = True
+                self.previous_agent = self.agent_name_mapping[self.agent_selection]
                 self.agent_selection = self._agent_selector.next()
+
+                # change player in game_manager
+                self.game_manager.current_player_index = self.agent_name_mapping[self.agent_selection]
+                self.game_manager.dice_rolled = False
+                self.game_manager.turn += 1
+
+                # Reset the game manager pass turn flag
+                self.game_manager.player_passed_turn = False
             # If the agent is not done doing their actions, they should continue
             else:
                 self.agent_selection = agent
@@ -549,7 +586,8 @@ class CatanEnv(AECEnv):
             self._accumulate_rewards()
             
     def decode_action(self, action):
-        print(f"Decoding action: {action}")
+        if self.verbose:
+            print(f"Decoding action: {action}")
         num_vertices = len(self.vertices_list)
         
         if action == self.pass_action_index:
@@ -605,7 +643,7 @@ class CatanEnv(AECEnv):
         return valid_actions
     
     def get_normal_phase_actions(self, agent):
-        valid_actions = [self.pass_action_index]
+        valid_actions = []
         player_idx = self.agent_name_mapping[agent]
         player = self.players[player_idx]
         self.game_manager.current_player_index = player_idx
@@ -613,27 +651,29 @@ class CatanEnv(AECEnv):
         if not self.game_manager.dice_rolled:
             valid_actions.append(self.roll_dice_action_index)
             return valid_actions
-        else:
-            self.game_manager.find_available_house__and_city_locations()
-            self.game_manager.find_available_road_locations()
-            
-            num_vertices = len(self.vertices_list)
-            
-            for vertex in self.game_manager.highlighted_vertecies:
-                idx = self.vertices_list.index(vertex)
-                if vertex.house is None and vertex.city is None:
-                    action = 2 + idx
-                    valid_actions.append(action)
-                elif vertex.house is not None and vertex.house.player == player and vertex.city is None:
-                    action = 2 + num_vertices + idx
-                    valid_actions.append(action)
-                    
-            for edge in self.game_manager.highlighted_edges:
-                idx = self.edges_list.index(edge)
-                action = 2 + 2 * num_vertices + idx
+        
+        valid_actions.append(self.pass_action_index)
+        
+        self.game_manager.find_available_house__and_city_locations()
+        self.game_manager.find_available_road_locations()
+        
+        num_vertices = len(self.vertices_list)
+        
+        for vertex in self.game_manager.highlighted_vertecies:
+            idx = self.vertices_list.index(vertex)
+            if vertex.house is None and vertex.city is None:
+                action = 2 + idx
+                valid_actions.append(action)
+            elif vertex.house is not None and vertex.house.player == player and vertex.city is None:
+                action = 2 + num_vertices + idx
                 valid_actions.append(action)
                 
-            return valid_actions
+        for edge in self.game_manager.highlighted_edges:
+            idx = self.edges_list.index(edge)
+            action = 2 + 2 * num_vertices + idx
+            valid_actions.append(action)
+            
+        return valid_actions
     
     def calculate_reward(self, agent, action_type):
         reward = 0
@@ -684,7 +724,8 @@ class CatanEnv(AECEnv):
         max_possible_bonus = max_dice_weight * 1.5 * 1.2
         normalized_bonus = total_bonus / max_possible_bonus
         if normalized_bonus > 0.6:
-            self.console.log(f"{player.get_color()} did a good settlement placement, normalized bonus: {normalized_bonus}")
+            if self.verbose:
+                print(f"{player.get_color()} did a good settlement placement, normalized bonus: {normalized_bonus}")
         return total_bonus
     
     def render(self):
@@ -770,5 +811,12 @@ class CatanEnv(AECEnv):
         if (self.render_mode == "human" and self.is_open) or (self.render_mode == "rgb_array" and self.is_open):
             pygame.quit()
             self.is_open = False
+
+
+# TODO: Create a function that collects metrics that should be saved in run file, function should return a json object of metrics
+# - seed
+# - Number of turns
+# - gameboard
+# - player state
         
         
