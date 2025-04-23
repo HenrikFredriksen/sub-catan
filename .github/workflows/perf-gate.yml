@@ -1,0 +1,65 @@
+name: Perf gate
+
+on:
+  push: 
+    branches: [ main, 7-Runtime-optimiastion ]
+  pull_request:
+    branches: [ main ]          # run on every PR aimed at main
+
+jobs:
+  speed-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    # -- 1. source & env -------------------------------------------------
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        python-version: "3.11"          
+        environment-file: requirements.txt  # or a list of packages
+        activate-environment: sub-env
+
+    # -- 2. baseline from main -------------------------------------------
+    - name: Get baseline wall-time artifact from main
+      if: github.event.pull_request
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        workflow: perf-gate.yml
+        branch: main
+        name: wall-main
+        path: perf
+
+    # -- 3. profile current commit ---------------------------------------
+    - name: Profile (5 episodes)
+      run: |
+        chmod +x scripts/run_profile.sh
+        EPISODES=5 scripts/run_profile.sh smoke
+        # extract number after "WALL "
+        grep "WALL" perf/smoke_*.log | awk '{print $2}' > perf/wall-pr
+
+    # -- 4. publish artefacts so next runs can fetch them ----------------
+    - name: Upload wall-time artefact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wall-${{ github.ref_name }}
+        path: perf/wall-pr
+
+    # -- 5. compare & fail if >20 % slower -------------------------------
+    - name: Compare with baseline
+      run: |
+        BASE=$(cat perf/wall-main 2>/dev/null || echo 0)
+        PR=$(cat perf/wall-pr)
+        echo "baseline=$BASE  pr=$PR"
+        if (( $(echo "$BASE > 0" | bc -l) )); then
+          RATIO=$(echo "$PR / $BASE" | bc -l)
+          echo "ratio=$RATIO"
+          # fail if slower by >20 %
+          if (( $(echo "$RATIO > 1.20" | bc -l) )); then
+            echo "::error::Runtime regression: $PR s vs $BASE s"
+            exit 1
+          fi
+        fi
+
