@@ -1,8 +1,10 @@
 name: Perf gate
 
 on:
+  push: 
+    branches: [ main, 7-Runtime-optimiastion ]
   pull_request:
-    branches: [ main, 7-Runtime-optimiastion ]          # run on every PR aimed at main
+    branches: [ main ]          # run on every PR aimed at main
 
 jobs:
   speed-check:
@@ -33,8 +35,8 @@ jobs:
     # -- 3. profile current commit ---------------------------------------
     - name: Profile (5 episodes)
       run: |
-        chmod +x run_profile.sh
-        EPISODES=5 ./run_profile.sh smoke
+        chmod +x scripts/run_profile.sh
+        EPISODES=5 scripts/run_profile.sh smoke
         # extract number after "WALL "
         grep "WALL" perf/smoke_*.log | awk '{print $2}' > perf/wall-pr
 
