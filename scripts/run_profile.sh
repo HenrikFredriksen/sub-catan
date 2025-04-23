@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+mkdir -p perf
 
 # -------- parameters ----------
 TAG=${1:-wip}                    # any label: before_batching, gpu_on, etc.
