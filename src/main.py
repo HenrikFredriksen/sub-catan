@@ -69,11 +69,11 @@ def main():
     )
 
     if args.train_settle_phase:
-        print("Training settle phase with config:", cfg)
+        print(f"Training settle phase with config: \n{cfg}")
 
         trainer.train_settlement_phase()
     elif args.train:
-        print("Training with config: \n", cfg)
+        print(f"Training with config: \n{cfg}")
 
         trainer.train(n_episodes=cfg.train.num_episodes, seed=cfg.miscs.seed, gamestate=cfg.train.gamestate)
     elif args.eval:

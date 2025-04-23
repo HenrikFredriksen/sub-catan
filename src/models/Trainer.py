@@ -139,13 +139,12 @@ class Trainer:
             print(param_message)
 
         # Train the agent
-        rewards = ppo.train(n_episodes, seed=seed, max_turns_without_building=1000)
+        ppo.train(n_episodes, seed=seed, max_turns_without_building=1000)
 
         self.writer.close()
 
         # Plot training rewards if desired
         print("Training completed!")
-        print(f"Final average reward: {sum(rewards) / len(rewards):.2f}")
         return ppo
 
 
