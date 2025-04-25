@@ -149,6 +149,17 @@ Rewards is given based on the player's actions and game progress:
 
 In the current iteration, the point is to encurage the agents to gain victory points as fast as possible.
 
+
+### Trademark notice
+
+**CATAN®** and **SETTLERS OF CATAN®** are registered trademarks of CATAN GmbH.  
+*Sub-Catan* (this software project) is an **independent, fan-made work** that is **not
+affiliated with, endorsed, sponsored, or approved by CATAN GmbH** or Catan Studio.
+
+All original code and artwork in this repository are © 2025 Henrik Fredriksen and
+contributors, released under the MIT Licence (see LICENCE file).  
+
+
 ## Contact Information
 Feel free to reach out if anything:
 
