@@ -8,6 +8,8 @@ game_frames/
 saved_models/
 run_logs/
 perf/
+old_traininglogs/
+features.md
 
 profile_commands.txt
 compare_profiles.py

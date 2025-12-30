@@ -68,25 +68,26 @@ def main():
         config=cfg,
     )
 
-    if args.train_settle_phase:
-        print(f"Training settle phase with config: \n{cfg}")
-
-        trainer.train_settlement_phase()
-    elif args.train:
-        print(f"Training with config: \n{cfg}")
-
-        trainer.train(n_episodes=cfg.train.num_episodes, seed=cfg.miscs.seed, gamestate=cfg.train.gamestate)
-    elif args.eval:
-        evaluator = Evaluator(cfg)
-        for _ in range (cfg.test.num_evals):
-            evaluator.eval_trained_agents(render_mode=cfg.eval.render_mode, gamestate='normal_phase')
-    elif args.test_env:
-        test_environment()
-    elif args.interactive:
-        GameLoop().main()
-    else:
-        print("No valid argument provided. Use --help for more information.")
-
+    match True:
+        case _ if args.train_settle_phase:
+            print("Training settle phase with config:", cfg)
+            trainer.train_settlement_phase()
+        case _ if args.train:
+            print("Training with config: \n", cfg)
+            trainer.train(n_episodes=cfg.train.num_episodes, 
+                          seed=cfg.miscs.seed, 
+                          gamestate=cfg.train.gamestate)
+        case _ if args.eval:
+            evaluator = Evaluator(cfg)
+            for _ in range (cfg.test.num_evals):
+                evaluator.eval_trained_agents(render_mode=cfg.eval.render_mode, 
+                                              gamestate='normal_phase')
+        case _ if args.test_env:
+            test_environment()
+        case _ if args.interactive:
+            GameLoop().main()
+        case _:
+            print("No valid argument provided. Use --help for more information.")
 
 if __name__ == "__main__":
     '''
