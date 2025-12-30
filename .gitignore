@@ -1,3 +1,17 @@
+# Repo specific
+.vscode/
+./*.pt
+run_logs/
+test/
+saved_models/
+game_frames/
+saved_models/
+run_logs/
+perf/
+
+profile_commands.txt
+compare_profiles.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
