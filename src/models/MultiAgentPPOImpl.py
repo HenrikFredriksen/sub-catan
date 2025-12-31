@@ -6,6 +6,9 @@ import torch.optim as optim
 import numpy as np
 from torch.distributions import Categorical
 
+#profiling
+from time import perf_counter
+
 '''
 This file contains the classes and functions for the MultiAgentPPO model implementation.
 The MultiAgentPPO class is used to train multiple agents using the Proximal Policy Optimization (PPO) algorithm.
@@ -202,9 +205,9 @@ class MultiAgentPPO:
     def choose_action(self, agent_id, observation):
         if self.env.terminations.get(agent_id, False):
             return None, None, None
-         
-        state = torch.FloatTensor(self.env.observe(agent_id)["observation"])
-        action_mask = torch.FloatTensor(self.env.observe(agent_id)["action_mask"])
+                 
+        state = torch.FloatTensor(observation["observation"])
+        action_mask = torch.FloatTensor(observation["action_mask"])
         
         with torch.no_grad():
             try:
@@ -244,6 +247,10 @@ class MultiAgentPPO:
     
     def learn(self, agent_id, episode):
 
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        t0 = perf_counter()
+
         policy_losses = []
         value_losses = []
         total_losses = []
@@ -252,7 +259,7 @@ class MultiAgentPPO:
         try:
             memory = self.memories[agent_id]
             if len(memory.states) < self.batch_size:
-                return
+                return 0.0
 
             network = self.agents[agent_id]["network"]
             optimizer = self.agents[agent_id]["optimizer"]
@@ -367,13 +374,23 @@ class MultiAgentPPO:
         except Exception as e:
             print(f"Error in learning step for agent {agent_id}: {e}")
             memory.clear()
+            return perf_counter() - t0
 
-    def train(self, n_episodes, seed=None, max_turns_without_building=100, verbose=False):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        return perf_counter() - t0
+
+    def train(self, n_episodes, seed=None, max_env_calls=None, verbose=False, perf=False):
+        stop_early = False
+
         if seed is not None:
             torch.manual_seed(seed)
+
         best_reward = float('-inf')
         episode_rewards = []
 
+        
         # Create a directory for saved models if it doesn't exist
         os.makedirs("saved_models", exist_ok=True)
 
@@ -382,66 +399,125 @@ class MultiAgentPPO:
             d for d in os.listdir("saved_models")
             if os.path.isdir(os.path.join("saved_models", d))
         ])
-        # e.g. "saved_models/run_000"
-        save_dir_root = f"saved_models/run_{run_number+1:03}"
+
+        if perf:
+            save_dir_root = f"saved_models/run_{run_number+1:03}_perf"
+        else:
+            save_dir_root = f"saved_models/run_{run_number+1:03}"
         os.makedirs(save_dir_root, exist_ok=True)
+
+        timing_csv = os.path.join(save_dir_root, "timing.csv")
+        timing_fields = [
+            "episode", 
+            "env_calls", "act_calls", "obs_calls",
+            "env_time_s_total", "env_ms_per_step",
+            "act_time_s_total", "act_ms_per_call",
+            "obs_time_s_total", "obs_ms_per_call",
+            "learn_s_total",
+            "episode_wall_s"
+        ]
     
-        
+        #PROFILE
+        run_wall_t0 = perf_counter()
+
+        total_env_time = 0.0
+        total_act_time = 0.0
+        total_obs_time = 0.0
+        total_learn_time = 0.0
+        total_env_calls = 0
+        total_act_calls = 0
+        total_obs_calls = 0
+
         for episode in range(n_episodes):
-            import time
-            t0 = time.time()
-            #print(f"Starting episode {episode + 1}")
             
-            episode_seed = seed + episode if seed is not None else None
-            obs = self.env.reset(seed=episode_seed, return_info=True)[0]
+            ep_wall_t0 = perf_counter()
+            ep_env_time = 0.0
+            ep_act_time = 0.0
+            ep_obs_time = 0.0
+            ep_learn_time = 0.0
+            ep_env_calls = 0
+            ep_act_calls = 0
+            ep_obs_calls = 0
+            
+            episode_seed = (seed + episode) if seed is not None else None
+            self.env.reset(seed=episode_seed, return_info=True)[0]
+
             done = {agent: False for agent in self.env.agents}
             episode_reward = {agent: 0 for agent in self.env.agents}
             
             step = 0
-            turns_without_building = 0
-            last_building_count = sum(p.settlements + p.cities for p in self.env.players)
-            
+
             while not all(done.values()):
                 agent_id = self.env.agent_selection
-                
-                #current_building_count = sum(p.settlements + p.cities for p in self.env.players)
-                #if current_building_count > last_building_count:
-                #    turns_without_building = 0
-                #    last_building_count = current_building_count
-                #else:
-                #    turns_without_building += 1
-                    
-                #if turns_without_building > max_turns_without_building:
-                #    print("Ending episode due to no building for too long")
-                #    for ag in self.env.agents:
-                #        episode_reward[ag] = -10
-                #        done[ag] = True
-                #    break
 
                 done[agent_id] = (
-                self.env.terminations.get(agent_id, False) or 
-                self.env.truncations.get(agent_id, False)
+                    self.env.terminations.get(agent_id, False) or 
+                    self.env.truncations.get(agent_id, False)
                 )
                 
-                # Skip agents that have been terminated
+                # Terminated / not active
                 if done.get(agent_id, False) or agent_id not in self.env.agents:
+                    t0 = perf_counter()
                     self.env.step(None)  # Pass None to step for terminated agents
+                    dt = perf_counter() - t0
+                    ep_env_time += dt
+                    total_env_time += dt
+                    ep_env_calls += 1
+                    total_env_calls += 1
+
+                    if max_env_calls is not None and total_env_calls >= max_env_calls:
+                        stop_early = True
+                        break
                     continue
                 
+                t0 = perf_counter()
                 observation = self.env.observe(agent_id)
+                dt = perf_counter() - t0
+                ep_obs_time += dt
+                total_obs_time += dt
+                ep_obs_calls += 1
+                total_obs_calls += 1
 
+                # ------- action selection timing (policy forward + sampling)
+                t0 = perf_counter()
                 # Choose and take action
-                action_data = self.choose_action(agent_id, observation)
-                if action_data is None:
-                    print("action data was none")
-                    # If no valid action, pass
-                    self.env.step(None)
-                    continue
-                else:
-                    action, prob, val = action_data
+                action, prob, val = self.choose_action(agent_id, observation)
+                dt = perf_counter() - t0
+                
+                ep_act_time += dt
+                total_act_time += dt
 
+                ep_act_calls += 1
+                total_act_calls += 1
+
+                if action is None:
+                    # No valid action could be chosen
+                    t0 = perf_counter()
+                    self.env.step(None)
+                    dt = perf_counter() - t0
+                    ep_env_time += dt
+                    total_env_time += dt
+                    ep_env_calls += 1
+                    total_env_calls += 1
+
+                    if max_env_calls is not None and total_env_calls >= max_env_calls:
+                        stop_early = True
+                        break
+                    continue
+
+                # ------ env step timing
+                t0 = perf_counter()
                 # Take action in environment
                 self.env.step(action)
+                dt = perf_counter() - t0
+                ep_env_time += dt
+                total_env_time += dt
+                ep_env_calls += 1
+                total_env_calls += 1
+
+                if max_env_calls is not None and total_env_calls >= max_env_calls:
+                    stop_early = True
+                    break
 
                 # Update rewards and done status
                 reward = self.env.rewards.get(agent_id, 0)
@@ -462,46 +538,89 @@ class MultiAgentPPO:
                 
                 step += 1
 
-            # After the episode ends, proceed to learning and reward calculation
-            self.calculate_additional_rewards(episode_reward, episode, verbose)
-            
-            #logging
-            total_episode_reward = sum(episode_reward.values())
-            avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
-            episode_rewards.append(avg_episode_reward)
+                if stop_early:
+                    break
 
-            self._log_global(AverageReward = avg_episode_reward,
-                             TotalReward   = total_episode_reward,
-                             EpisodeLength = self.env.step_count) # Duplicate values of step count in env and in trainer
-            
-            # Check if it's time to learn
-            for agent_id in self.env.possible_agents:
-                self.writer.add_scalar(f"Agent_{agent_id}/Ep_Reward", episode_reward[agent_id], episode)
-                if len(self.memories[agent_id].states) > 0:
-                    self.learn(agent_id, episode)
-            
-                        
-            # Calculate average reward for this episode
-            
-            for agent_id in self.env.possible_agents:
-                self.memories[agent_id].clear()
+            if not stop_early:
+                # After the episode ends, proceed to learning and reward calculation
+                self.calculate_additional_rewards(episode_reward, episode, verbose)
 
-            elapsed_time = time.time() - t0
+                #logging
+                total_episode_reward = sum(episode_reward.values())
+                avg_episode_reward = sum(episode_reward.values()) / len(episode_reward)
+                episode_rewards.append(avg_episode_reward)
+
+                self._log_global(
+                    AverageReward = avg_episode_reward,
+                    TotalReward   = total_episode_reward,
+                    EpisodeLength = self.env.step_count) # Duplicate values of step count in env and in trainer
+
+                # Check if it's time to learn
+                for agent_id in self.env.possible_agents:
+                    self.writer.add_scalar(f"Agent_{agent_id}/Ep_Reward", episode_reward[agent_id], episode)
+                    if len(self.memories[agent_id].states) > 0:
+                        ep_learn_time += self.learn(agent_id, episode)
+
+
+                # Calculate average reward for this episode
+                for agent_id in self.env.possible_agents:
+                    self.memories[agent_id].clear()
+
+            ep_wall = perf_counter() - ep_wall_t0
+
+            env_ms_per_step = 1000.0 * ep_env_time / max(1, ep_env_calls)
+            act_ms_per_step = 1000.0 * ep_act_time / max(1, ep_act_calls)
+            obs_ms_per_step = 1000.0 * ep_obs_time / max(1, ep_obs_calls)
+
+            total_learn_time += ep_learn_time
+
+            append_csv(timing_csv, timing_fields, {
+                "episode": episode + 1,
+                "env_calls": ep_env_calls,
+                "act_calls": ep_act_calls,
+                "obs_calls": ep_obs_calls,
+                "env_time_s_total": ep_env_time,
+                "env_ms_per_step": env_ms_per_step,
+                "act_time_s_total": ep_act_time,
+                "act_ms_per_call": act_ms_per_step,
+                "obs_time_s_total": ep_obs_time,
+                "obs_ms_per_call": obs_ms_per_step,
+                "learn_s_total": ep_learn_time,
+                "episode_wall_s": ep_wall
+            })
+
+            if stop_early:
+                #print("Stopping early due to max_env_calls limit.")
+                break
+
+            # TensorBoard timing curves (trend view)
+            self.writer.add_scalar("Timing/env_ms_per_step", env_ms_per_step, episode)
+            self.writer.add_scalar("Timing/act_ms_per_step", act_ms_per_step, episode)
+            self.writer.add_scalar("Timing/env_s_total", ep_env_time, episode)
+            self.writer.add_scalar("Timing/act_s_total", ep_act_time, episode)
+            self.writer.add_scalar("Timing/learn_s_total", ep_learn_time, episode)
+            self.writer.add_scalar("Timing/episode_wall_s", ep_wall, episode)
+
+            if (episode + 1) % 10 == 0:
+                print(
+                    f"[timing] ep={episode+1} "
+                    f"env={env_ms_per_step:.3f} ms/step "
+                    f"act={act_ms_per_step:.3f} ms/act "
+                    f"learn={ep_learn_time:.3f} s "
+                    f"wall={ep_wall:.3f} s"
+                )
                         
             # Print training progress
             if (episode + 1) % 1 == 0:            
                 avg_reward_all_episodes = sum(episode_rewards) / len(episode_rewards)
-                print(f"Episode {episode + 1}/{n_episodes}: "
-                      f"Steps: {step}, "
-                      f"Average Reward: {avg_reward_all_episodes:.2f}, " 
-                      f"time={elapsed_time:.2f}s")
+                print(f"Episode {episode + 1}/{n_episodes}: Steps: {step}, Average Reward: {avg_reward_all_episodes:.2f}")
                 
                 # Log the average reward for the episode, with 2 decimal places 
-                print(f"AVG REWARD: {episode_reward[agent_id]:.2f} | "
-                      f"P_1: {episode_reward['player_1']:.2f} | "
-                      f"P_2: {episode_reward['player_2']:.2f} | "
-                      f"P_3: {episode_reward['player_3']:.2f} | "
-                      f"P_4: {episode_reward['player_4']:.2f}")
+                #print(f"AVG REWARD: {episode_reward[agent_id]:.2f} | "
+                #      f"P_1: {episode_reward['player_1']:.2f} | "
+                #      f"P_2: {episode_reward['player_2']:.2f} | "
+                #      f"P_3: {episode_reward['player_3']:.2f} | "
+                #      f"P_4: {episode_reward['player_4']:.2f}")
                 
                 
                 # Save models every 1000 episodes
@@ -516,7 +635,7 @@ class MultiAgentPPO:
                 # If current average reward is better than all previous, save as "best_models"
                 # TODO: Save only the best model of all agents instead of checking for avg change in last ep.
                 # So, check if current iter of agent is better than earlier version of itself and save that model
-                if avg_reward_all_episodes > best_reward:
+                if (not perf) and avg_reward_all_episodes > best_reward:
                     best_reward = avg_reward_all_episodes
                     best_dir = os.path.join(save_dir_root, "best_models")
                     os.makedirs(best_dir, exist_ok=True)
@@ -525,6 +644,23 @@ class MultiAgentPPO:
                         torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
                     print(f"New best average reward {best_reward:.2f} — models saved to {best_dir}")
 
+        run_wall = perf_counter() - run_wall_t0
+        env_ms = 1000.0 * total_env_time / max(1, total_env_calls)
+        act_ms = 1000.0 * total_act_time / max(1, total_act_calls)
+        obs_ms = 1000.0 * total_obs_time / max(1, total_obs_calls)
+
+        
+        print(
+            f"PERF_SUMMARY "
+            f"env_calls={total_env_calls} "
+            f"env_ms={env_ms:.3f} "
+            f"act_calls={total_act_calls} "
+            f"act_ms={act_ms:.3f} "
+            f"obs_calls={total_obs_calls} "
+            f"obs_ms={obs_ms:.3f} "
+            f"learn_s={total_learn_time:.3f} "
+            f"wall_s={run_wall:.3f}"
+        )
     # Calculate rewards based on victory points and other game conditions
     def calculate_additional_rewards(self, episode_reward, episode, verbose):
         victory_points = self.env.get_victory_points()
@@ -576,3 +712,14 @@ class MultiAgentPPO:
         for name, value in scalars.items():
             self.writer.add_scalar(f"Global/{name}", value, self.global_step)
         self.global_step += 1          # create this counter in __init__
+
+import csv
+
+def append_csv(path, fieldnames, row_dict):
+    file_exists = os.path.exists(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            w.writeheader()
+        w.writerow(row_dict)

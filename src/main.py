@@ -21,62 +21,84 @@ def argparser():
     )
     parser.add_argument(
         "--train_settle_phase",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Train agents in the settlement phase of the game",
     )
     parser.add_argument(
         "--train",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Train agents in the normal phase of the game",
     )
     parser.add_argument(
         "--eval",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Evaluate trained agents, how many times to evaluate",
     )
     parser.add_argument(
         "--test_env",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Test the environment by taking random actions for each agent",
     )
     parser.add_argument(
         "--interactive",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Run the interactive game loop",
     )
+
+    # performance optimization args
+    parser.add_argument(
+        "--perf", 
+        action="store_true",
+        help="Run performance benchmark mode (prints PERF_SUMMARY)")
+    parser.add_argument(
+        "--max_env_calls", 
+        type=int, 
+        default=None,
+        help="Stop after this many env.step calls (benchmarking)")
+    parser.add_argument(
+        "--seed", 
+        type=int, 
+        default=None,
+        help="Override seed (optional)")
+    
+    # config override args
     parser.add_argument(
         "--cfg_opts",
         default=None,
         nargs=argparse.REMAINDER,
         help="Modify config options using the command-line",
     )
+    
     return parser.parse_args()
 
 def main():
     args = argparser()
     cfg = parse_config_file(args.config_file) if args.config_file else get_default_config() 
-    if args.config_file:
+    if args.cfg_opts:
         # Parse the config file
         cfg.merge(args.cfg_opts)
+
+    if args.perf:
+        cfg.miscs.verbose = False
+        cfg.miscs.render_mode = None
     
-    trainer = Trainer.Trainer(
-        config=cfg,
-    )
+    trainer = Trainer.Trainer(config=cfg, perf=args.perf)
 
     match True:
         case _ if args.train_settle_phase:
             print("Training settle phase with config:", cfg)
             trainer.train_settlement_phase()
         case _ if args.train:
-            print("Training with config: \n", cfg)
+            if not args.perf:
+                print("Training with config: \n", cfg)
+
+            seed = args.seed if args.seed is not None else cfg.miscs.seed
+
             trainer.train(n_episodes=cfg.train.num_episodes, 
-                          seed=cfg.miscs.seed, 
-                          gamestate=cfg.train.gamestate)
+                          seed=seed, 
+                          gamestate=cfg.train.gamestate,
+                          max_env_calls=args.max_env_calls if args.perf else None)
+            
         case _ if args.eval:
             evaluator = Evaluator(cfg)
             for _ in range (cfg.test.num_evals):
