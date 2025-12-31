@@ -159,6 +159,7 @@ class CatanEnv(AECEnv):
             self.console = PrintConsole()
         self.game_manager = GameManager(self.game_board, self.game_rules, self.players, self.console)
         self.game_board.generate_board(board_radius=2)
+        self.tiles_list = list(self.game_board.tiles.values())
         self.vertices_list = list(self.game_board.vertices.values())
         self.edges_list = list(self.game_board.edges.values())
         
@@ -214,11 +215,16 @@ class CatanEnv(AECEnv):
         return 2 + num_vertices + num_vertices + num_edges 
     
     def calculate_board_state_size(self):
+        P = len(self.players) # 4 players
         num_vertices = len(self.game_board.vertices)
         num_edges = len(self.game_board.edges)
         num_tiles = len(self.game_board.tiles)
-        # 2 for house and city, 1 for road, 6 for resources and 1 for number
-        return num_vertices * 2 + num_edges * 1 + num_tiles * 6 + num_tiles * 1
+
+        vertex_feat = 1 + 2 * P # empty + (house,city)Player
+        edge_feat = 1 + P   # empty + (road)Player
+        tile_feat = 7 # 6 for resources and 1 for number
+
+        return num_vertices * vertex_feat + num_edges * edge_feat + num_tiles * tile_feat
     
     def calculate_player_state_size(self):
         num_resources = 5
@@ -255,7 +261,7 @@ class CatanEnv(AECEnv):
         if self.gamestate == 'normal_phase':
             self._agent_selector = agent_selector(self.possible_agents)
             self.agent_selection = self.agents[0]
-            self.game_board = self.load_random_board_normal_phase()
+            self.game_board = self.load_specific_board_normal_phase('game_board_0.pkl')
             self.game_board.set_screen_dimensions(1400, 700)
             self.game_rules = GameRules(self.game_board)
             self.players = [
@@ -268,8 +274,14 @@ class CatanEnv(AECEnv):
             Player(player_id=3, color=(255, 165, 0), settlements=3, roads=13, cities=4, victory_points=2,
                    resources={'wood': 0,'brick': 0,'sheep': 0,'wheat': 0,'ore': 0}) # Orange player
             ]
+            self.tiles_list = list(self.game_board.tiles.values())
             self.vertices_list = list(self.game_board.vertices.values())
             self.edges_list = list(self.game_board.edges.values())
+  
+            self.tile_to_idx = {t: i for i, t in enumerate(self.tiles_list)}
+            self.vertex_to_idx = {v: i for i, v in enumerate(self.vertices_list)}
+            self.edge_to_idx = {e: i for i, e in enumerate(self.edges_list)}
+
         # Settle phase
         else:
             print(self.starting_agents)
@@ -289,8 +301,13 @@ class CatanEnv(AECEnv):
             Player(player_id=3, color=(255, 165, 0), settlements=5, roads=15, cities=4, victory_points=0,
                    resources={'wood': 4,'brick': 4,'sheep': 2,'wheat': 2,'ore': 0}) # Orange player
             ]
+            self.tiles_list = list(self.game_board.tiles.values())
             self.vertices_list = list(self.game_board.vertices.values())
             self.edges_list = list(self.game_board.edges.values())
+
+            self.tile_to_idx = {t: i for i, t in enumerate(self.tiles_list)}
+            self.vertex_to_idx = {v: i for i, v in enumerate(self.vertices_list)}
+            self.edge_to_idx = {e: i for i, e in enumerate(self.edges_list)}
 
         player_id_map = {player.player_id: player for player in self.players}
 
@@ -341,6 +358,19 @@ class CatanEnv(AECEnv):
             self.render()
                  
         obs = self.observe(self.agent_selection)
+
+        # Sanity check for observation space
+        assert obs["observation"].dtype == np.float32
+        assert obs["action_mask"].shape == (self.action_spaces[self.agent_selection].n,)
+        assert obs["observation"].shape == self.observation_spaces[self.agent_selection]["observation"].shape
+        
+        # one-hot integrity checks
+        # vertices: every vertex vec sums to 1
+        P = len(self.players)
+        V = len(self.vertices_list)
+        vertex_feat = 1 + 2*P
+        vs = obs["observation"][:V*vertex_feat].reshape(V, vertex_feat)
+        assert np.allclose(vs.sum(axis=1), 1.0)
         
         if return_info:
             return obs, self.infos[self.agent_selection]
@@ -353,6 +383,15 @@ class CatanEnv(AECEnv):
             raise Exception("No saved boards found in 'saved_boards' directory")
         random_board_file = random.choice(board_files)
         file_path = os.path.join('normal_phase_boards', random_board_file)
+        with open(file_path, 'rb') as f:
+            game_board = pickle.load(f)
+            if self.verbose:
+                print(f"Loaded board from {file_path}")
+        return game_board
+    
+    def load_specific_board_normal_phase(self, file_name):
+        # Load a specific board from the saved boards directory
+        file_path = os.path.join('normal_phase_boards', file_name)
         with open(file_path, 'rb') as f:
             game_board = pickle.load(f)
             if self.verbose:
@@ -391,46 +430,50 @@ class CatanEnv(AECEnv):
         return action_mask
     
     def get_board_state(self):
-        # Vertex states: 2 values for house and city, 0 if empty
+        P = len(self.players) # 4 players
+
+        # vertex states
         vertex_states = []
-        for vertex in self.game_board.vertices.values():
-            if vertex.house:
-                vertex_state = np.array([1, 0], dtype=np.float32)
-            elif vertex.city:
-                vertex_state = np.array([0, 1], dtype=np.float32)
-            else:
-                vertex_state = np.array([0, 0], dtype=np.float32)
-            vertex_states.append(vertex_state)
-        # vertex_states should be number of vertices x 2
-        vertex_states = np.array(vertex_states).flatten()
+        for v in self.vertices_list:
+            vec = np.zeros(1 + 2 * P, dtype=np.float32) # 1 for empty, 2 per player (house, city)
+            if v.house is None and v.city is None:
+                vec[0] = 1.0
+            elif v.city is not None:
+                player_idx = v.city.player.player_id # 0..3
+                vec[1 + 2 * player_idx + 1] = 1.0
+            elif v.house is not None:
+                player_idx = v.house.player.player_id # 0..3
+                vec[1 + 2 * player_idx] = 1.0
+            vertex_states.append(vec)
+        vertex_states = np.concatenate(vertex_states, axis=0)
         
-        # Edge states: 1 value for road, 0 if empty
+        # edge states
         edge_states = []
-        for edge in self.game_board.edges.values():
-            if edge.road:
-                edge_state = np.array([1], dtype=np.float32)
+        for e in self.edges_list:
+            vec = np.zeros(1 + P, dtype=np.float32) # 1 for empty, 1 per player (road)
+            if e.road is None:
+                vec[0] = 1.0
             else:
-                edge_state = np.array([0], dtype=np.float32)
-            edge_states.append(edge_state)
-        # edge_states should be number of edges x 1
-        edge_states = np.array(edge_states).flatten()
+                player_idx = e.road.player.player_id # 0..3
+                vec[1 + player_idx] = 1.0
+            edge_states.append(vec)
+        edge_states = np.concatenate(edge_states, axis=0)
         
-        # Tile states: 6 values for resources and  1 for number (7 total), 0 if empty
+        # tile states
         tile_states = []
         resource_to_idx = {'wood': 0, 'brick': 1, 'sheep': 2, 'wheat': 3, 'ore': 4, 'desert': 5}
-        for tile in self.game_board.tiles.values():
-            resource_one_hot = np.zeros(7, dtype=np.float32)
-            tile_number = tile.number / 12
-            resource_one_hot[6] = tile_number
+        for tile in self.tiles_list:
+            vec = np.zeros(7, dtype=np.float32) # 6 for resources and 1 for number
+            vec[6] = float(tile.number) / 12.0
             resource_idx = resource_to_idx.get(tile.resource, -1)
             if resource_idx >= 0:
-                resource_one_hot[resource_idx] = 1
-            tile_states.append(resource_one_hot)
+                vec[resource_idx] = 1
+            tile_states.append(vec)
         # tile_states should be number of tiles x 7, 6 for resources and 1 for number
-        tile_states = np.array(tile_states).flatten()
+        tile_states = np.concatenate(tile_states, axis=0)
         
         # board_state should be number of vertices x 2 + number of edges x 1 + number of tiles x 7
-        board_state = np.concatenate([vertex_states, edge_states, tile_states])
+        board_state = np.concatenate([vertex_states, edge_states, tile_states]).astype(np.float32)
         
         return board_state
     
@@ -446,7 +489,7 @@ class CatanEnv(AECEnv):
             player.resources['wheat'],
             player.resources['ore']
         ], dtype=np.float32)
-        resources /= 25
+        resources = np.clip(resources / 25.0, 0.0, 1.0)  # Assuming a max of 25 for normalization
         
         # Normalize remaining pieces to a range [0, 1]
         remaining_pieces = np.array([
@@ -467,7 +510,8 @@ class CatanEnv(AECEnv):
             player_idx = self.agent_name_mapping[enemy]
             player = self.players[player_idx]
             if enemy != agent:
-                enemy_total_resources = sum(player.resources.values()) / (25 * 5)
+                enemy_total_resources = sum(player.resources.values())
+                enemy_total_resources = np.clip(enemy_total_resources / (25.0 * 5.0), 0.0, 1.0)  # Normalize to [0, 1]
                 enemy_vp = player.victory_points / 10
                 enemy_state = np.array([enemy_total_resources, enemy_vp], dtype=np.float32)
                 enemy_states.append(enemy_state)
@@ -553,6 +597,7 @@ class CatanEnv(AECEnv):
                 self.game_manager.gamestate = 'normal_phase'
                 if self.verbose:
                     print(f"step_Phase transition to normal phase")
+
         # Normal phase
         else:
             # If the turn is over, the next agent should be the next one, sync with game_manager
@@ -588,24 +633,30 @@ class CatanEnv(AECEnv):
     def decode_action(self, action):
         if self.verbose:
             print(f"Decoding action: {action}")
+
         num_vertices = len(self.vertices_list)
+        num_edges = len(self.edges_list)
         
         if action == self.pass_action_index:
             return 'pass_turn', None
         elif action == self.roll_dice_action_index:
             return 'roll_dice', None
-        elif 2 <= action < num_vertices:
-            vertex_index = action - 2
-            vertex = self.vertices_list[vertex_index]
+        elif 2 <= action < 2 + num_vertices:
+            idx = action - 2
+            vertex = self.vertices_list[idx]
             return 'place_house', vertex
-        elif num_vertices <= action < 2 * num_vertices:
-            vertex_index = action - num_vertices - 2
-            vertex = self.vertices_list[vertex_index]
+        elif 2 + num_vertices <= action < 2 + 2 * num_vertices:
+            idx = action - (2 + num_vertices)
+            vertex = self.vertices_list[idx]
             return 'place_city', vertex
-        else:
-            edge_index = action - 2 * num_vertices - 2
-            edge = self.edges_list[edge_index]
+        
+        start = 2 + 2 * num_vertices
+        if start <= action < start + num_edges:
+            idx = action - start
+            edge = self.edges_list[idx]
             return 'place_road', edge
+        
+        raise ValueError(f"Action {action} is out of range")
     
     def get_valid_actions(self, agent):
         if self.game_manager.gamestate == 'settle_phase':
@@ -619,7 +670,6 @@ class CatanEnv(AECEnv):
     def get_settle_phase_actions(self, agent):
         valid_actions = [] 
         player_idx = self.agent_name_mapping[agent]
-        player = self.players[player_idx]
         self.game_manager.current_player_index = player_idx
         
         self.game_manager.find_available_house__and_city_locations()
@@ -629,13 +679,13 @@ class CatanEnv(AECEnv):
         
         if self.game_manager.starting_sub_phase == 'house':
             for vertex in self.game_manager.highlighted_vertecies:
-                idx = self.vertices_list.index(vertex)
+                idx = self.vertex_to_idx[vertex]
                 action = 2 + idx # 2 for pass and roll dice actions
                 valid_actions.append(action)
             
         elif self.game_manager.starting_sub_phase == 'road':    
             for edge in self.game_manager.highlighted_edges:
-                idx = self.edges_list.index(edge)
+                idx = self.edge_to_idx[edge]
                 # 2 for pass and roll dice actions, 2 * num_vertices for placing settlements
                 action = 2 + 2 * num_vertices + idx 
                 valid_actions.append(action)
@@ -660,7 +710,7 @@ class CatanEnv(AECEnv):
         num_vertices = len(self.vertices_list)
         
         for vertex in self.game_manager.highlighted_vertecies:
-            idx = self.vertices_list.index(vertex)
+            idx = self.vertex_to_idx[vertex]
             if vertex.house is None and vertex.city is None:
                 action = 2 + idx
                 valid_actions.append(action)
@@ -669,7 +719,7 @@ class CatanEnv(AECEnv):
                 valid_actions.append(action)
                 
         for edge in self.game_manager.highlighted_edges:
-            idx = self.edges_list.index(edge)
+            idx = self.edge_to_idx[edge]
             action = 2 + 2 * num_vertices + idx
             valid_actions.append(action)
             

@@ -10,6 +10,7 @@ run_logs/
 perf/
 old_traininglogs/
 features.md
+TODO.md
 
 profile_commands.txt
 compare_profiles.py
