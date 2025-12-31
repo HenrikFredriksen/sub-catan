@@ -34,23 +34,15 @@ class PPONetwork(nn.Module):
             nn.ReLU()
         )
         
-        self.policy_head = nn.Sequential(
-            nn.Linear(hidden_dim, output_dim),
-            nn.Softmax(dim=-1)
-        )
-        
-        self.value_head = nn.Sequential(
-            nn.Linear(hidden_dim, 1)
-        )
+        self.policy_head = nn.Linear(hidden_dim, output_dim)
+        self.value_head = nn.Linear(hidden_dim, 1)
         
     def forward(self, x, action_mask):
         shared_features = self.shared_layers(x)
-        
-        # Apply action mask to policy logits
-        shared_features = torch.nn.functional.normalize(shared_features, dim=-1)
 
-        policy_logits = self.policy_head[0](shared_features)
-        masked_logits = policy_logits.masked_fill(action_mask == 0, float('-inf'))
+        # Apply action mask to policy logits
+        policy_logits = self.policy_head(shared_features)
+        masked_logits = policy_logits.masked_fill(action_mask == 0, -1e9)
         
         policy = torch.nn.functional.softmax(masked_logits, dim=-1)
 
@@ -74,22 +66,20 @@ class AlternativeNetwork(nn.Module):
             nn.Linear(int(hidden_dim * 1.5), hidden_dim),
             nn.ReLU(),
         )
-        self.policy_head = nn.Sequential(nn.Linear(hidden_dim, output_dim), nn.Softmax(dim=-1))
-        self.value_head = nn.Sequential(nn.Linear(hidden_dim, 1))
+        self.policy_head = nn.Linear(hidden_dim, output_dim)
+        self.value_head = nn.Linear(hidden_dim, 1)
         
     def forward(self, x, action_mask):
         shared_features = self.shared_layers(x)
         
         # Apply action mask to policy logits
-        shared_features = torch.nn.functional.normalize(shared_features, dim=-1)
-
-        policy_logits = self.policy_head[0](shared_features)
-        masked_logits = policy_logits.masked_fill(action_mask == 0, float('-inf'))
+        policy_logits = self.policy_head(shared_features)
+        masked_logits = policy_logits.masked_fill(action_mask == 0, -1e9)
         
         policy = torch.nn.functional.softmax(masked_logits, dim=-1)
 
         # Ensure policy is valid
-        policy = torch.clamp(policy, 1e-7, 1)
+        policy = torch.clamp(policy, 1e-7, 1.0)
         policy = policy / policy.sum(dim=-1, keepdim=True)
         
         value = self.value_head(shared_features)
@@ -246,139 +236,129 @@ class MultiAgentPPO:
                 return action.item(), 0.0, 0.0
     
     def learn(self, agent_id, episode):
-
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         t0 = perf_counter()
 
-        policy_losses = []
-        value_losses = []
-        total_losses = []
-        entropies = []
 
-        try:
-            memory = self.memories[agent_id]
-            if len(memory.states) < self.batch_size:
-                return 0.0
-
-            network = self.agents[agent_id]["network"]
-            optimizer = self.agents[agent_id]["optimizer"]
-
-            states = torch.FloatTensor(np.array(memory.states))
-            actions = torch.LongTensor(np.array(memory.actions))
-            old_probs = torch.FloatTensor(np.array(memory.probs))
-            vals = torch.FloatTensor(np.array(memory.vals))
-            rewards = torch.FloatTensor(np.array(memory.rewards))
-            dones = torch.FloatTensor(np.array(memory.dones))
-            action_masks = torch.FloatTensor(np.array(memory.action_masks))
+        memory = self.memories[agent_id]
+        T = len(memory.states)
+        if T < self.batch_size:
+            return 0.0
             
-            advantages = torch.zeros_like(rewards)
-            last_gae_lam = 0
-            
-            for t in reversed(range(len(rewards))):
-                if t == len(rewards) - 1:
-                    next_val = 0
-                else:
-                    next_val = vals[t + 1]
-                    
-                delta = rewards[t] + self.gamma * next_val * (1 - dones[t]) - vals[t]
-                advantages[t] = last_gae_lam = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * last_gae_lam
-                
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        network = self.agents[agent_id]["network"]
+        optimizer = self.agents[agent_id]["optimizer"]
 
-            for epoch in range(self.n_epochs):
-                policy, value = network(states, action_masks)
+        # Tensor conversion
+        states = torch.FloatTensor(np.array(memory.states))              # [T, obs]
+        actions = torch.LongTensor(np.array(memory.actions))             # [T]
+        old_logp = torch.FloatTensor(np.array(memory.probs))            # [T] (log probs)
+        old_values = torch.FloatTensor(np.array(memory.vals))                  # [T]
+        rewards = torch.FloatTensor(np.array(memory.rewards))            # [T]
+        dones = torch.FloatTensor(np.array(memory.dones))                # [T] (dones 0/1)
+        action_masks = torch.FloatTensor(np.array(memory.action_masks))  # [T, act_dim]
+        
+        with torch.no_grad():
+            advantages = torch.zeros(T, dtype=torch.float32)
+            last_gae = 0.0
+            for t in reversed(range(T)):
+                next_value = 0.0 if (t == T - 1) else old_values[t + 1]
+                delta = rewards[t] + self.gamma * next_value * (1.0 - dones[t]) - old_values[t]
+                last_gae = delta + self.gamma * self.gae_lambda * (1.0 - dones[t]) * last_gae
+                advantages[t] = last_gae
 
-                if torch.isnan(policy).any() or torch.isnan(value).any():
-                    print(f"NaN detected in forward pass for agent {agent_id}")
-                    break
+        returns = advantages + old_values
+        advantages_norm = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        advantages_norm = advantages_norm.detach()
+        returns = returns.detach()
+
+        for epoch in range(self.n_epochs):
+            idx = torch.randperm(T)
+            nan_hit = False
+
+            epoch_policy_losses = []
+            epoch_value_losses = []
+            epoch_entropies = []
+            epoch_kls = []
+            epoch_clip_fractions = []
+            epoch_gradnorms = []
+
+            for start in range(0, T, self.batch_size):
+                mb = idx[start:start + self.batch_size]
+
+                mb_states = states[mb]
+                mb_masks = action_masks[mb].bool()
+                mb_actions = actions[mb]
+                mb_old_logp = old_logp[mb]
+                mb_adv = advantages_norm[mb]
+                mb_returns = returns[mb]
+
+                policy, value = network(mb_states, mb_masks)
+                value = value.squeeze(-1) # [B]
 
                 dist = Categorical(policy)
-                new_probs = dist.log_prob(actions)
+                new_logp = dist.log_prob(mb_actions) # [B]
                 entropy = dist.entropy().mean()
 
-                # 1. Approx‑KL (measured BEFORE we clamp ratio)
-                approx_kl = (old_probs - new_probs).mean()
+                log_ratio = new_logp - mb_old_logp
+                ratio = torch.exp(torch.clamp(log_ratio, -20.0, 20.0))
 
-                ratio = (new_probs - old_probs).exp()
-                ratio = torch.clamp(ratio, -10, 10)  # Prevent extreme ratios
-
-                surrogate1 = ratio * advantages
-                surrogate2 = torch.clamp(ratio, 1-self.clip_epsilon, 1+self.clip_epsilon) * advantages
-                
-                policy_type = self.agents[agent_id]["policy_type"]
-                
-                entropy_coef = self.c2
-                if policy_type == 'explorative':
-                    entropy_coef = self.c2 * 2
-                    
-                    state_values = self.agents[agent_id]["network"].value_head(states)
-                    state_std = state_values.std()
-                    exploration_bonus = state_std * 0.1
-                    advantages = advantages + exploration_bonus
-
+                surrogate1 = ratio * mb_adv
+                surrogate2 = torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * mb_adv
                 policy_loss = -torch.min(surrogate1, surrogate2).mean()
-                value_loss = 0.5 * ((rewards - value) ** 2).mean()
+
+                value_loss = 0.5 * (mb_returns - value).pow(2).mean()
 
                 loss = policy_loss + self.c1 * value_loss - self.c2 * entropy
-
-                optimizer.zero_grad()
-                loss.backward()
-
-                grad_norm = torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
-
-                optimizer.step()
-
-                clip_fraction = (ratio.detach().abs() > self.clip_epsilon).float().mean()
-
-                # Explained variance of the value function
-                var_y = rewards.var(unbiased=False)
-                explained_var = (torch.tensor(0.) if var_y == 0
-                                 else 1 - (rewards - value.detach()).var(unbiased=False) / var_y)
-
-                # Collect for logging
-                policy_losses.append(policy_loss.item())
-                value_losses.append(value_loss.item())
-                total_losses.append(loss.item())
-                entropies.append(entropy.item())
-
-
-                # push per‑epoch stats to TensorBoard
-                self._log_update_stats(agent_id,
-                                       policy_loss = policy_loss.item(),
-                                       value_loss  = value_loss.item(),
-                                       entropy     = entropy.item(),
-                                       approx_kl   = approx_kl.item(),
-                                       clip_frac   = clip_fraction.item(),
-                                       grad_norm   = grad_norm.item(),
-                                       explained_var = explained_var.item())
-
-
                 # Monitor loss values
                 if torch.isnan(loss):
                     print(f"NaN loss detected for agent {agent_id}")
+                    nan_hit = True
                     break
 
-            memory.clear()
+                optimizer.zero_grad()
+                loss.backward()
+                grad_norm =torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
+                optimizer.step()
 
-            #avg_policy_loss = np.mean(policy_losses)
-            #avg_value_loss = np.mean(value_losses)
-            #avg_total_loss = np.mean(total_losses)
-            #avg_entropy = np.mean(entropies)
-            
-            #self.writer.add_scalar(f"Policy Loss/Agent {agent_id}", avg_policy_loss, episode)
-            #self.writer.add_scalar(f"Value Loss/Agent {agent_id}", avg_value_loss, episode)
-            #self.writer.add_scalar(f"Total Loss/Agent {agent_id}", avg_total_loss, episode)
-            #self.writer.add_scalar(f"Entropy/Agent {agent_id}", avg_entropy, episode)
+                approx_kl = (mb_old_logp - new_logp).mean().item()
+                clip_fraction = ((ratio.detach() - 1.0).abs() > self.clip_epsilon).float().mean().item()
 
-        except Exception as e:
-            print(f"Error in learning step for agent {agent_id}: {e}")
-            memory.clear()
-            return perf_counter() - t0
+                epoch_policy_losses.append(policy_loss.item())
+                epoch_value_losses.append(value_loss.item())
+                epoch_entropies.append(entropy.item())
+                epoch_kls.append(approx_kl)
+                epoch_clip_fractions.append(clip_fraction)
+                epoch_gradnorms.append(float(grad_norm))
+
+            if nan_hit or len(epoch_policy_losses) == 0:
+                break
+            # Logging per epoch
+            with torch.no_grad():
+                _, v_all = network(states, action_masks.bool())
+                v_all = v_all.squeeze(-1)  # [T]
+                var_y = returns.var(unbiased=False)
+                explained_var = (torch.tensor(0.0) 
+                                 if var_y < 1e-12 
+                                 else 1.0 - (returns - v_all).var(unbiased=False) / var_y
+                                 )
+          
+            self._log_update_stats(
+                agent_id,
+                policy_loss = float(np.mean(epoch_policy_losses)),
+                value_loss = float(np.mean(epoch_value_losses)),
+                entropy = float(np.mean(epoch_entropies)),
+                approx_kl = float(np.mean(epoch_kls)),
+                clip_frac = float(np.mean(epoch_clip_fractions)),
+                grad_norm = float(np.mean(epoch_gradnorms)),
+                explained_var = explained_var.item(),
+            )
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
 
+        memory.clear()
         return perf_counter() - t0
 
     def train(self, n_episodes, seed=None, max_env_calls=None, verbose=False, perf=False):
