@@ -109,12 +109,13 @@ class CatanEnv(AECEnv):
             2. 'rgb_array' - Returns the game state as an RGB array.
         
     @Author: Henrik Tobias Fredriksen
-    @date: 19. October 2024
+    @date: 2. January 2026
     '''
     metadata = {'render.modes': ['human', 'rgb_array'], 'gamestate': ['settle_phase', 'normal_phase'], 'name': 'catan_v0'}
     
-    def __init__(self, render_mode=None, gamestate='normal_phase', verbose=False):
+    def __init__(self, render_mode=None, gamestate='normal_phase', seed=None, verbose=False):
         super().__init__()
+        self.rng = np.random.default_rng() if seed is None else np.random.default_rng(seed)
         self.verbose = verbose
         self.render_mode = render_mode
         self.gamestate = gamestate
@@ -140,7 +141,7 @@ class CatanEnv(AECEnv):
         self.agents = ['player_1', 'player_2', 'player_3', 'player_4']
         self.possible_agents = self.agents[:]
         self.starting_agents = self.agents + self.agents[::-1]
-        self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents)))))  
+        self.agent_name_mapping = dict(zip(self.agents, (range(len(self.agents))))) 
         self.agent_selection = None      
         
         self.game_board = GameBoard(self.tile_images, self.number_images)            
@@ -233,9 +234,7 @@ class CatanEnv(AECEnv):
         return num_resources + num_different_pieces + victory_points
     
     def reset(self, seed=None, return_info=False, options=False):
-        if seed is not None:
-            np.random.seed(seed)
-            random.seed(seed)
+        self.rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
             
         # reset counter and flags
         self.step_count = 0
@@ -329,6 +328,7 @@ class CatanEnv(AECEnv):
                                         game_rules=self.game_rules, 
                                         players=self.players, 
                                         console=self.console, 
+                                        rng=self.rng,
                                         verbose=self.verbose)
         self.game_manager.gamestate = self.gamestate
         if self.gamestate == 'normal_phase':
@@ -363,7 +363,7 @@ class CatanEnv(AECEnv):
         assert obs["observation"].dtype == np.float32
         assert obs["action_mask"].shape == (self.action_spaces[self.agent_selection].n,)
         assert obs["observation"].shape == self.observation_spaces[self.agent_selection]["observation"].shape
-        
+
         # one-hot integrity checks
         # vertices: every vertex vec sums to 1
         P = len(self.players)
@@ -381,7 +381,7 @@ class CatanEnv(AECEnv):
         board_files = os.listdir('normal_phase_boards')
         if not board_files:
             raise Exception("No saved boards found in 'saved_boards' directory")
-        random_board_file = random.choice(board_files)
+        random_board_file = self.rng.choice(board_files)
         file_path = os.path.join('normal_phase_boards', random_board_file)
         with open(file_path, 'rb') as f:
             game_board = pickle.load(f)

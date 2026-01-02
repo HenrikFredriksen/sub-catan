@@ -18,7 +18,7 @@ train() - Train agents in either the normal phase or the whole game
 Both scripts support multiple policies for different agents.
 
 @Author: Henrik Tobias Fredriksen
-@Date: 19. October 2024
+@Date: 2. January 2026
 '''
 class Trainer:
     def __init__(self, config, perf: bool = False):
@@ -31,6 +31,7 @@ class Trainer:
 
         self.seed = self.cfg.miscs.seed
         self.batch_size = self.cfg.train.batch_size
+        self.rollout_steps = self.cfg.train.rollout_steps
         self.num_episodes = self.cfg.train.num_episodes
         self.learning_rate = self.cfg.train.learning_rate
         #self.eval_interval = self.cfg.eval.eval_interval
@@ -47,10 +48,12 @@ class Trainer:
 
         ppo = MultiAgentPPO(
             env=self.env,
+            seed=self.seed,
             writer=self.writer,
             agent_policies=self.agent_policies,
             hidden_dim=self.hidden_dim,
             batch_size=self.batch_size,
+            rollout_steps=self.rollout_steps,
             learning_rate=self.learning_rate,
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
@@ -59,7 +62,7 @@ class Trainer:
             max_steps=self.max_steps
         )
 
-        rewards = ppo.train(n_episodes, seed=self.seed)
+        ppo.train(n_episodes, verbose=self.verbose, perf=self.perf)
 
         for agent_id in ppo.agents:
             torch.save(
@@ -112,7 +115,6 @@ class Trainer:
 
         # Train the agent
         ppo.train(n_episodes, 
-                  seed=seed, 
                   max_env_calls=max_env_calls,
                   verbose=self.verbose,
                   perf=self.perf)

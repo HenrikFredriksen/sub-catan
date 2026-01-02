@@ -17,7 +17,7 @@ The PPOMemory class is used to store experiences and sample batches for training
 The get_policy_network function is used to create the policy network for each agent, adding support for different policy types.
 
 @Author: Henrik Tobias Fredriksen
-@Date: 19. October 2024
+@Date: 2. January 2026
 '''
 class PPONetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
@@ -93,7 +93,7 @@ def get_policy_network(policy_type, input_dim, hidden_dim, output_dim):
     return policies[policy_type](input_dim, hidden_dim, output_dim)
 
 class PPOMemory:
-    def __init__(self, batch_size):
+    def __init__(self, batch_size, rng=None):
         self.states = []
         self.actions = []
         self.probs = []
@@ -102,6 +102,7 @@ class PPOMemory:
         self.dones = []
         self.action_masks = []
         self.batch_size = batch_size
+        self.rng = rng if rng is not None else np.random.default_rng()
         
     def store(self, state, action, prob, val, reward, done, action_mask):
         self.states.append(state)
@@ -125,7 +126,7 @@ class PPOMemory:
         n_states = len(self.states)
         batch_start = np.arange(0, n_states, self.batch_size)
         indices = np.arange(n_states, dtype=np.int64)
-        np.random.shuffle(indices)
+        self.rng.shuffle(indices)
         batches = [indices[i:i+self.batch_size] for i in batch_start]
         
         return (
@@ -148,8 +149,11 @@ class MultiAgentPPO:
         **kwargs
     ):
         self.env = env
+        self.seed = kwargs.get('seed', 1234)
+        self.rng = np.random.default_rng(self.seed)
         self.writer = writer
         self.batch_size = kwargs.get('batch_size', 32)
+        self.rollout_steps = kwargs.get('rollout_steps', 1024)
         self.learning_rate = kwargs.get('learning_rate', 0.0003)
         self.gamma = kwargs.get('gamma', 0.99)
         self.gae_lambda = kwargs.get('gae_lambda', 0.95)
@@ -192,48 +196,41 @@ class MultiAgentPPO:
             # Create memory
             self.memories[agent_id] = PPOMemory(kwargs.get('batch_size', 32))
     
-    def choose_action(self, agent_id, observation):
-        if self.env.terminations.get(agent_id, False):
-            return None, None, None
-                 
+    def choose_action(self, policy_id, observation):  
         state = torch.FloatTensor(observation["observation"])
         action_mask = torch.FloatTensor(observation["action_mask"])
         
         with torch.no_grad():
-            try:
-                policy, value = self.agents[agent_id]["network"](state, action_mask)
-
-                # Check for NaN in policy or value and set random valid_action if policy is NaN
-                if torch.isnan(policy).any():
-                    print(f"Warning: NaN in policy for agent {agent_id}")
-                    # Return a dummy action
-                    valid_actions = torch.nonzero(action_mask).flatten()
-                    if len(valid_actions) == 0:
-                        return None, None, None
-                    action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
-                    return action.item(), 0.0, 0.0
-            
-                # Create distribution only for valid actions
-                dist = Categorical(policy)
-                action = dist.sample()
-                prob = dist.log_prob(action)
-
-                if action_mask[action] == 0:
-                    print(f"Warning: Invalid action {action.item()} chosen for agent {agent_id}")
-                    # Fallback safe
-                    valid_actions = torch.nonzero(action_mask).flatten()
-                    action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
-                    prob = torch.log(torch.tensor(1.0 / len(valid_actions)))
-       
-                return action.item(), prob.item(), value.item()
-            
-            except Exception as e:
-                print(f"Error choosing action for agent: {agent_id}: {str(e)}")
-                valid_actions = torch.nonzero(action_mask).flatten()   
+            policy, value = self.agents[policy_id]["network"](state, action_mask)
+        
+            # Check for NaN in policy or value and set random valid_action if policy is NaN
+            if torch.isnan(policy).any():
+                print(f"Warning: NaN in policy for agent {policy_id}")
+                # Return a dummy action
+                valid_actions = torch.nonzero(action_mask).flatten()
                 if len(valid_actions) == 0:
                     return None, None, None
                 action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
                 return action.item(), 0.0, 0.0
+        
+            # Create distribution only for valid actions
+            dist = Categorical(policy)
+            action = dist.sample()
+            logp = dist.log_prob(action)
+            if action_mask[action] == 0:
+                print(f"Warning: Invalid action {action.item()} chosen for agent {policy_id}")
+                # Fallback safe
+                valid_actions = torch.nonzero(action_mask).flatten()
+                action = valid_actions[torch.randint(0, len(valid_actions), (1,))]
+                logp = torch.log(torch.tensor(1.0 / len(valid_actions)))
+    
+            return action.item(), logp.item(), value.item()
+            
+    def _seat_permutation(self, episode: int):
+        seats = list(self.env.possible_agents)
+        policies = list(self.env.possible_agents)
+        perm = self.rng.permutation(policies)
+        self.seat_to_policy = {seat: perm[i] for i, seat in enumerate(seats)}
     
     def learn(self, agent_id, episode):
         if torch.cuda.is_available():
@@ -361,11 +358,11 @@ class MultiAgentPPO:
         memory.clear()
         return perf_counter() - t0
 
-    def train(self, n_episodes, seed=None, max_env_calls=None, verbose=False, perf=False):
+    def train(self, n_episodes, max_env_calls=None, verbose=False, perf=False):
         stop_early = False
 
-        if seed is not None:
-            torch.manual_seed(seed)
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
 
         best_reward = float('-inf')
         episode_rewards = []
@@ -409,7 +406,9 @@ class MultiAgentPPO:
         total_obs_calls = 0
 
         for episode in range(n_episodes):
+
             
+            #PROFILE
             ep_wall_t0 = perf_counter()
             ep_env_time = 0.0
             ep_act_time = 0.0
@@ -419,24 +418,27 @@ class MultiAgentPPO:
             ep_act_calls = 0
             ep_obs_calls = 0
             
-            episode_seed = (seed + episode) if seed is not None else None
-            self.env.reset(seed=episode_seed, return_info=True)[0]
+            episode_seed = (self.seed + episode) if self.seed is not None else None
+            self._seat_permutation(episode)
+            obs, _ = self.env.reset(seed=episode_seed, return_info=True)
 
             done = {agent: False for agent in self.env.agents}
             episode_reward = {agent: 0 for agent in self.env.agents}
+            policy_episode_reward = {pid: 0.0 for pid in self.env.possible_agents}
             
             step = 0
+            last_idx = {}
 
             while not all(done.values()):
-                agent_id = self.env.agent_selection
+                seat_id = self.env.agent_selection
 
-                done[agent_id] = (
-                    self.env.terminations.get(agent_id, False) or 
-                    self.env.truncations.get(agent_id, False)
+                done[seat_id] = (
+                    self.env.terminations.get(seat_id, False) or 
+                    self.env.truncations.get(seat_id, False)
                 )
                 
                 # Terminated / not active
-                if done.get(agent_id, False) or agent_id not in self.env.agents:
+                if done.get(seat_id, False) or seat_id not in self.env.agents:
                     t0 = perf_counter()
                     self.env.step(None)  # Pass None to step for terminated agents
                     dt = perf_counter() - t0
@@ -451,17 +453,19 @@ class MultiAgentPPO:
                     continue
                 
                 t0 = perf_counter()
-                observation = self.env.observe(agent_id)
+                observation = self.env.observe(seat_id)
                 dt = perf_counter() - t0
                 ep_obs_time += dt
                 total_obs_time += dt
                 ep_obs_calls += 1
                 total_obs_calls += 1
 
+                policy_id = self.seat_to_policy[seat_id]
+
                 # ------- action selection timing (policy forward + sampling)
                 t0 = perf_counter()
                 # Choose and take action
-                action, prob, val = self.choose_action(agent_id, observation)
+                action, prob, val = self.choose_action(policy_id, observation)
                 dt = perf_counter() - t0
                 
                 ep_act_time += dt
@@ -500,21 +504,23 @@ class MultiAgentPPO:
                     break
 
                 # Update rewards and done status
-                reward = self.env.rewards.get(agent_id, 0)
-                #print(f"Agent {agent_id} took action {action} and got reward {reward}")
-                done[agent_id] = self.env.terminations.get(agent_id, False) or self.env.truncations.get(agent_id, False)
-                episode_reward[agent_id] += reward
+                reward = self.env.rewards.get(seat_id, 0)
+                policy_episode_reward[policy_id] += reward
+                done[seat_id] = self.env.terminations.get(seat_id, False) or self.env.truncations.get(seat_id, False)
+                episode_reward[seat_id] += reward
 
                 # Store experience
-                self.memories[agent_id].store(
+                mem = self.memories[policy_id]
+                mem.store(
                     state=observation['observation'],
                     action=action,
                     prob=prob,
                     val=val,
                     reward=reward,
-                    done=done[agent_id],
+                    done=done[seat_id],
                     action_mask=observation['action_mask']
                 )
+                last_idx[policy_id] = len(mem.rewards) - 1
                 
                 step += 1
 
@@ -522,8 +528,15 @@ class MultiAgentPPO:
                     break
 
             if not stop_early:
+                for pid, i in last_idx.items():
+                    self.memories[pid].dones[i] = 1.0  # Mark last step as done
                 # After the episode ends, proceed to learning and reward calculation
-                self.calculate_additional_rewards(episode_reward, episode, verbose)
+                seat_bonus = self.calculate_additional_rewards(episode)
+                for seat_id, bonus in seat_bonus.items():
+                    pid = self.seat_to_policy[seat_id]
+                    if pid in last_idx:
+                        self.memories[pid].rewards[last_idx[pid]] += bonus
+                        policy_episode_reward[pid] += bonus
 
                 #logging
                 total_episode_reward = sum(episode_reward.values())
@@ -536,15 +549,10 @@ class MultiAgentPPO:
                     EpisodeLength = self.env.step_count) # Duplicate values of step count in env and in trainer
 
                 # Check if it's time to learn
-                for agent_id in self.env.possible_agents:
-                    self.writer.add_scalar(f"Agent_{agent_id}/Ep_Reward", episode_reward[agent_id], episode)
-                    if len(self.memories[agent_id].states) > 0:
-                        ep_learn_time += self.learn(agent_id, episode)
-
-
-                # Calculate average reward for this episode
-                for agent_id in self.env.possible_agents:
-                    self.memories[agent_id].clear()
+                for policy_id in self.env.possible_agents:
+                    self.writer.add_scalar(f"Agent_{policy_id}/Ep_Reward", policy_episode_reward[policy_id], episode)
+                    if len(self.memories[policy_id].states) >= self.rollout_steps:
+                        ep_learn_time += self.learn(policy_id, episode)
 
             ep_wall = perf_counter() - ep_wall_t0
 
@@ -590,45 +598,40 @@ class MultiAgentPPO:
                     f"wall={ep_wall:.3f} s"
                 )
                         
+            if episode % 50 == 0:
+                print(policy_id, "buffer_len", len(self.memories[policy_id].states), "updates", self.update_step)
+
             # Print training progress
             if (episode + 1) % 1 == 0:            
-                avg_reward_all_episodes = sum(episode_rewards) / len(episode_rewards)
-                print(f"Episode {episode + 1}/{n_episodes}: Steps: {step}, Average Reward: {avg_reward_all_episodes:.2f}")
-                
-                # Log the average reward for the episode, with 2 decimal places 
-                #print(f"AVG REWARD: {episode_reward[agent_id]:.2f} | "
-                #      f"P_1: {episode_reward['player_1']:.2f} | "
-                #      f"P_2: {episode_reward['player_2']:.2f} | "
-                #      f"P_3: {episode_reward['player_3']:.2f} | "
-                #      f"P_4: {episode_reward['player_4']:.2f}")
-                
+                avg_episode_reward = sum(episode_rewards) / len(episode_rewards)
+                #
+                print(f"Episode {episode + 1}/{n_episodes}: Steps: {step}, Average Reward: {avg_episode_reward:.2f}")
                 
                 # Save models every 1000 episodes
                 if (episode + 1) % 1000 == 0:
                     ep_dir = os.path.join(save_dir_root, f"ep_{episode + 1}")
                     os.makedirs(ep_dir, exist_ok=True)
-                    for agent_id in self.agents:
-                        model_path = os.path.join(ep_dir, f"model_agent_{agent_id}.pt")
-                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    for policy_id in self.agents:
+                        model_path = os.path.join(ep_dir, f"model_agent_{policy_id}.pt")
+                        torch.save(self.agents[policy_id]["network"].state_dict(), model_path)
                     print(f"Saved models for episode {episode + 1} in {ep_dir}")
                 
                 # If current average reward is better than all previous, save as "best_models"
                 # TODO: Save only the best model of all agents instead of checking for avg change in last ep.
                 # So, check if current iter of agent is better than earlier version of itself and save that model
-                if (not perf) and avg_reward_all_episodes > best_reward:
-                    best_reward = avg_reward_all_episodes
+                if (not perf) and avg_episode_reward > best_reward:
+                    best_reward = avg_episode_reward
                     best_dir = os.path.join(save_dir_root, "best_models")
                     os.makedirs(best_dir, exist_ok=True)
-                    for agent_id in self.agents:
-                        model_path = os.path.join(best_dir, f"best_model_agent_{agent_id}.pt")
-                        torch.save(self.agents[agent_id]["network"].state_dict(), model_path)
+                    for policy_id in self.agents:
+                        model_path = os.path.join(best_dir, f"best_model_agent_{policy_id}.pt")
+                        torch.save(self.agents[policy_id]["network"].state_dict(), model_path)
                     print(f"New best average reward {best_reward:.2f} — models saved to {best_dir}")
 
         run_wall = perf_counter() - run_wall_t0
         env_ms = 1000.0 * total_env_time / max(1, total_env_calls)
         act_ms = 1000.0 * total_act_time / max(1, total_act_calls)
         obs_ms = 1000.0 * total_obs_time / max(1, total_obs_calls)
-
         
         print(
             f"PERF_SUMMARY "
@@ -641,43 +644,34 @@ class MultiAgentPPO:
             f"learn_s={total_learn_time:.3f} "
             f"wall_s={run_wall:.3f}"
         )
+
     # Calculate rewards based on victory points and other game conditions
-    def calculate_additional_rewards(self, episode_reward, episode, verbose):
+    def calculate_additional_rewards(self, episode):
         victory_points = self.env.get_victory_points()
 
         # Sort agents by victory points and reward based on placement
         rankings = sorted(victory_points.items(), key=lambda x: x[1], reverse=True)
 
-        position_rewards = {
-            0: 40,
-            1: 25,
-            2: 5,
-            3: 0
-        }
+        position_rewards = [40, 25, 5, -20]
+        seat_bonus = {seat: 0.0 for seat in victory_points}
 
-        for position, (agent_id, vp) in enumerate(rankings):
-            self.writer.add_scalar(f"Agent_{agent_id}/VPs", vp, episode)
+        for position, (seat_id, vp) in enumerate(rankings):
+            self.writer.add_scalar(f"Agent_{seat_id}/VPs", vp, episode)
 
-            scalar = position_rewards[position]
-            episode_reward[agent_id] += scalar
+            pid = self.seat_to_policy[seat_id]
+            self.writer.add_scalar(f"Agent_{pid}/VPs", vp, episode)
+
+            seat_bonus[seat_id] += position_rewards[position]
+            seat_bonus[seat_id] += 2.0 * vp  # 2 reward per victory point
 
             if position == 0 and self.env.game_manager.game_ended_by_victory_points:
-                extra_reward = 20
-                episode_reward[agent_id] += extra_reward
-                if verbose:
-                    print(f"Agent {agent_id} got extra reward of {extra_reward} for winning the game")
+                seat_bonus[seat_id] += 20.0  # Bonus for winning by VPs
 
-            if verbose:
-                print(f"{agent_id} placed {position + 1} with {vp} victory points and got reward {episode_reward[agent_id]}")
+            if self.env.terminations.get(seat_id, False):
+                seat_bonus[seat_id] -= 10.0  # Penalty for elimination
 
-            vp_reward = vp * 2
-            episode_reward[agent_id] += vp_reward
-
-            if self.env.terminations.get(agent_id, False):
-                termination_penalty = -10
-                episode_reward[agent_id] += termination_penalty
-                if verbose:
-                    print(f"Agent {agent_id} got termination penalty of {termination_penalty}")
+        return seat_bonus
+            
 
     # Logging helper functions
     def _log_update_stats(self, agent_id: str, **scalars):
