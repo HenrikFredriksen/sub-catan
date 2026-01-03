@@ -63,10 +63,10 @@ simulate_place_house(vertex): method to place a house without needing player res
 simulate_place_road(edge): method to place a road without needing player resources
 
 @Author: Henrik Tobias Fredriksen
-@Date: 19. October 2024
+@Date: 2. January 2026
 '''
 class GameManager:
-    def __init__(self, game_board, game_rules, players, console, verbose=True):
+    def __init__(self, game_board, game_rules, players, console, rng=None, verbose=True):
         self.verbose = verbose
         self.turn = 0
         self.max_turns = 1000
@@ -74,6 +74,7 @@ class GameManager:
         self.game_rules = game_rules
         self.players = players
         self.console = console
+        self.rng = rng if rng is not None else np.random.default_rng()
         self.current_player_index = 0
         
         #FLAGS
@@ -174,8 +175,8 @@ class GameManager:
             return False
         
     def roll_dice(self):
-        dice1 = np.random.randint(1, 7)
-        dice2 = np.random.randint(1, 7)
+        dice1 = self.rng.integers(1, 7)
+        dice2 = self.rng.integers(1, 7)
         if self.verbose:
             self.console.log(f"player: {self.current_player.get_color()} rolled Dice : {dice1}, {dice2}")
         return dice1 + dice2

@@ -254,6 +254,7 @@ class GameBoard:
         self.screen_width = width
         self.screen_height = height
         
+    # TODO: Implement an algorithm to generate fair board layouts
     def generate_board(self, board_radius):
         numbers = [2, 3,3, 4,4, 5,5, 6,6, 8,8, 9,9, 10,10, 11,11, 12]
         resources = ["brick"] * 3 + ["ore"] * 3 + ["wood"] * 4 + ["sheep"] * 4 + ["wheat"] * 4 + ["desert"]

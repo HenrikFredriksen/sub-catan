@@ -34,25 +34,26 @@ miscs = easydict({
 })
 
 train = easydict({
-    'batch_size': 32,
-    'num_episodes': 5000,
+    'batch_size': 128,
+    'rollout_steps': 512,
+    'num_episodes': 75000,
     'learning_rate': 0.0002,
     'gamma': 0.99,
-    'gae_lambda': 0.95,
-    'clip_epsilon': 0.4,
+    'gae_lambda': 0.96,
+    'clip_epsilon': 0.1,
     'n_epochs': 4,
     'max_steps': 10000,
-    'hidden_dim': 1536,
+    'hidden_dim': 256,
     'agent_policies': agent_policies,
-    'pretrained_model_path': './saved_models/run_015/',
-    'gamestate': 'settle_phase',
+    'pretrained_model_path': None,
+    'gamestate': 'normal_phase',
 })
 
 eval = easydict({
     'eval_interval': 100,
-    'render_mode': 'rgb_array',
-    'num_evals': 1,
-    'model_path': './saved_models/',
+    'render_mode': 'human',
+    'num_evals': 3,
+    'model_path': './saved_models/run_014/best_models/',
 })
 
 test = easydict({
