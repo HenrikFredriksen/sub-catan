@@ -12,7 +12,7 @@ LOG="perf/${TAG}_$(date +%Y%m%d_%H%M%S).log"
 /usr/bin/time -f "WALL %e s"    \
 python -m cProfile -o "$OUT"   \
        src/main.py            \
-       --train True           \
+       --train           \
        -f src/config/default_cfg.py \
        --cfg_opts             \
            train.num_episodes "$EPISODES" \

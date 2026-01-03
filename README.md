@@ -72,13 +72,16 @@ or install packages individually:
 - `main.py`: The main entry point of the project. Contains functions to run all runnable modes of the project, game loop
 train models, pretrain settlement phase, and evaluating trained agents
 - `environment/`: Contains the custom environment implementation for Sub-Catan
+    - `BoardGenerator.py`: Generates starting board layouts with preset starting positions
     - `CatanEnv.py`: Defines the CatanEnv class, the PettingZoo AECEnv main environment
+    - `CatanSettlePhaseEnv.py`: Super CatanEnv spesific for the settlephase.
     - `CustomAgentSelector.py`: Custom agent selector for managing agent turn order in the settle phase.
 - `game/`: Contains game logic and components:
     - `GameBoard.py`: Defines the game board structure.
     - `GameManager_env.py`: Manages the game state updates and agent actions.
     - `GameRules.py`: Contains the game rules for validation of player moves.
     - `Player.py`: Represents player states
+    - `HexCoordinate.py` / `Tile.py` / `Vertex.py` / `Edge.py`: Units of the gameboard
     - `House.py` / `City.py` / `Road.py`: represent game pieces.
 - `models/`: Contains models and training scripts
     - `Trainer.py`: Conatins training routines for agents.
@@ -163,7 +166,7 @@ contributors, released under the MIT Licence (see LICENCE file).
 ## Contact Information
 Feel free to reach out if anything:
 
-- Email: henritf@ntnu.no
+- Email: henriktf@uio.no
 - GitHub Issues: [Issues](https://github.com/HenrikFredriksen/sub-catan/issues)
 
 
